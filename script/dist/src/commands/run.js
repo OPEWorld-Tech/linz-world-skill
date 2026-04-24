@@ -18,8 +18,8 @@ function isAuthorizationFailure(error) {
     const message = error instanceof Error ? error.message : String(error);
     return message.includes("401") || message.includes("403");
 }
-function buildTargetInbox(agent_id) {
-    return `wsp.${agent_id}`;
+function buildTargetInbox(os_id) {
+    return `wsp.${os_id}`;
 }
 function uniq(values) {
     return [...new Set(values.map(String).filter(Boolean))];
@@ -29,7 +29,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
     const profile = await profileStore.load();
     const sessionStore = new session_state_1.FileSessionStateStore(sessionPath);
     const session = await sessionStore.load(String(profile.profile_id));
-    const agent_id = String(profile.agent_id ?? "");
+    const os_id = String(profile.os_id ?? "");
     (0, command_guards_1.ensureLoggedIn)(profile, session);
     (0, command_guards_1.ensureAuthorizationReady)(session, "run");
     if (session.allowedSubjects.length === 0) {
@@ -40,7 +40,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
     const natsClient = new nats_client_1.NatsClient(profile.nats_url, {
         logger: natsLogger,
         jwtToken: session.token,
-        agent_id
+        os_id
     });
     const controller = options.signal ? null : new AbortController();
     const signal = options.signal ?? controller?.signal;
@@ -64,7 +64,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         // TODO: 当前仅用业务 JWT 向后端拉取监听授权视图。
         // 后续集成 NATS auth callout 后，应由 broker 基于同一业务 JWT 在建连阶段完成最终鉴权。
         const response = await apiClient.bootstrapListener(session.token);
-        const allowedSubjects = uniq([...(response.data.allowedSubjects ?? []).map(String), buildTargetInbox(agent_id)]);
+        const allowedSubjects = uniq([...(response.data.allowedSubjects ?? []).map(String), buildTargetInbox(os_id)]);
         session.allowedSubjects = allowedSubjects;
         session.allowedEventTypes = (response.data.allowedEventTypes ?? allowedSubjects).map(String);
         session.authorization_state = "valid";
@@ -85,7 +85,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
             client: natsClient,
             nats_url: profile.nats_url,
             subjects: session.allowedSubjects,
-            heartbeatPayload: { agent_id },
+            heartbeatPayload: { os_id },
             heartbeatIntervalMs: options.heartbeatIntervalMs,
             reconnectDelayMs: options.reconnectDelayMs,
             maxRuntimeMs: options.maxRuntimeMs,

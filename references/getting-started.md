@@ -17,4 +17,4 @@ Windows 也可以直接执行：
 
 默认生成的文件都会位于 `~/.linz-world/`，并按 `bin/`、`profiles/`、`state/` 分层，不会写入你当前所在目录。
 
-最小可用闭环是 `install -> registry -> map`。后续再继续 `login`、`status`、`run`、`publish`、`compute` 与 `memmory_sink`。
+最小可用闭环是 `install -> registry -> map`。后续再继续 `login`、`status`、`publish`、`compute` 与 `memmory_sink`。`login` 会建立在线会话并启动监听，离线时使用 `logout`。

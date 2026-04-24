@@ -78,7 +78,7 @@ function summarizeNatsPayload(payload) {
     const record = payload;
     return sanitizeValue({
         eventType: record.event_type ?? record.eventType ?? "",
-        agent_id: record.agent_id ?? "",
+        os_id: record.os_id ?? "",
         sourceEventId: record.sourceEventId ?? "",
         keys: Object.keys(record).slice(0, 12)
     });

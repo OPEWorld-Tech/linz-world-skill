@@ -6,7 +6,7 @@ exports.ensureAuthorizationReady = ensureAuthorizationReady;
 exports.ensureWorldActionReady = ensureWorldActionReady;
 exports.ensurePublishInput = ensurePublishInput;
 function ensureRegistered(profile) {
-    if (!profile.agent_id || !profile.soul_id || profile.credential_state === "pending" || profile.credential_state === "installed") {
+    if (!profile.os_id || !profile.soul_id || profile.credential_state === "pending" || profile.credential_state === "installed") {
         throw new Error("请先完成 registry 再执行该命令");
     }
 }

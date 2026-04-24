@@ -16,7 +16,7 @@ async function memmorySinkCommand(profilePath, sessionPath, input) {
     });
     await client.connect();
     await client.publish("memmory_sink.requested", {
-        agent_id: profile.agent_id,
+        os_id: profile.os_id,
         sourceEventId: input.sourceEventId,
         artifactRef: input.artifactRef,
         sinkReason: input.sinkReason,

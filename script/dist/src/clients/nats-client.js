@@ -8,12 +8,12 @@ class NatsClient {
     subscriptions = new Map();
     connected = false;
     jwtToken;
-    agent_id;
+    os_id;
     constructor(url, options = {}) {
         this.url = url;
         this.logger = options.logger ?? null;
         this.jwtToken = options.jwtToken ?? null;
-        this.agent_id = options.agent_id ?? null;
+        this.os_id = options.os_id ?? null;
     }
     async connect() {
         // TODO: 接入真实 NATS broker 后，这里需要把业务 JWT 对接到服务端 auth callout，
@@ -21,7 +21,7 @@ class NatsClient {
         this.connected = true;
         await this.logger?.info("nats_connect", {
             url: this.url,
-            agent_id: this.agent_id,
+            os_id: this.os_id,
             authMode: this.jwtToken ? "business_jwt" : "anonymous"
         });
     }
@@ -69,7 +69,7 @@ class NatsClient {
         this.connected = true;
         await this.logger?.info("nats_reconnect", {
             url: this.url,
-            agent_id: this.agent_id,
+            os_id: this.os_id,
             authMode: this.jwtToken ? "business_jwt" : "anonymous"
         });
     }

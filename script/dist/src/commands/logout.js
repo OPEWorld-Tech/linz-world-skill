@@ -25,7 +25,7 @@ async function logoutCommand(profilePath, sessionPath) {
         profile_id: String(profile.profile_id)
     };
     profile.access_token = undefined;
-    profile.credential_state = profile.agent_id && profile.soul_id ? "registered" : "pending";
+    profile.credential_state = profile.os_id && profile.soul_id ? "registered" : "pending";
     profile.authorization_state = "unknown";
     await sessionStore.save(nextSession);
     await profileStore.save(profile);

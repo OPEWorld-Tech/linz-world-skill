@@ -23,12 +23,26 @@ async function mapCommand(profilePath, sessionPath) {
     (0, command_guards_1.ensureRegistered)(profile);
     const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
     try {
-        const response = await apiClient.map(profile.agent_id);
+        const token = String(session.token || profile.access_token || "");
+        if (!token) {
+            throw new Error("当前没有可用授权令牌，请重新登录后再执行 map");
+        }
+        const response = await apiClient.bootstrapListener(token);
+        session.token = session.token || token;
         session.allowedSubjects = response.data.allowedSubjects;
         session.allowedEventTypes = response.data.allowedEventTypes;
         session.authorization_state = "valid";
         await sessionStore.save(session);
-        return { ...response.data, source: "server" };
+        return {
+            viewVersion: response.data.viewVersion ?? "listener-bootstrap",
+            os_id: response.data.osId ?? profile.os_id,
+            allowedSubjects: response.data.allowedSubjects,
+            allowedEventTypes: response.data.allowedEventTypes,
+            usageNotes: response.data.usageNotes ?? [],
+            authorizationNotes: response.data.authorizationNotes ?? [],
+            fetchedAt: response.data.fetchedAt ?? new Date().toISOString(),
+            source: "server"
+        };
     }
     catch (error) {
         if (!isRecoverableMapError(error)) {
@@ -42,7 +56,7 @@ async function mapCommand(profilePath, sessionPath) {
         }
         return {
             viewVersion: "cache",
-            agent_id: profile.agent_id,
+            os_id: profile.os_id,
             allowedSubjects: session.allowedSubjects,
             allowedEventTypes: session.allowedEventTypes,
             usageNotes: ["当前返回的是本地降级授权视图，请尽快恢复服务端后重新执行 map"],

@@ -10,8 +10,8 @@ const api_client_1 = require("../clients/api-client");
 const profile_store_1 = require("../config/profile-store");
 const session_state_1 = require("../state/session-state");
 const key_material_1 = require("../utils/key-material");
-function buildTargetInbox(agent_id) {
-    return `wsp.${agent_id}`;
+function buildTargetInbox(os_id) {
+    return `wsp.${os_id}`;
 }
 function uniq(values) {
     return [...new Set((values ?? []).map(String).filter(Boolean))];
@@ -39,20 +39,20 @@ function spawnListenerProcess(profilePath, sessionPath) {
 async function loginCommand(profilePath, sessionPath, input, options = {}) {
     const profileStore = new profile_store_1.FileProfileStore(profilePath);
     const profile = await profileStore.load();
-    const agent_id = input.agent_id ?? profile.agent_id;
-    if (!agent_id || !profile.soul_id) {
+    const os_id = input.os_id ?? profile.os_id;
+    if (!os_id || !profile.soul_id) {
         throw new Error("请先完成 registry 再执行 login");
     }
     const keyMaterial = await (0, key_material_1.ensureLocalKeyMaterial)(profile);
     const timestamp = Date.now();
     const signedNonce = input.signedNonce ??
-        (await (0, key_material_1.signWithLocalPrivateKey)(keyMaterial.private_key_path, `${agent_id}.${timestamp}`));
+        (await (0, key_material_1.signWithLocalPrivateKey)(keyMaterial.private_key_path, `${os_id}.${timestamp}`));
     const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
-    const response = await apiClient.login(agent_id, signedNonce, timestamp);
+    const response = await apiClient.login(os_id, signedNonce, timestamp);
     const bootstrap = await apiClient.bootstrapListener(String(response.data.token ?? ""));
     const sessionStore = new session_state_1.FileSessionStateStore(sessionPath);
     const session = await sessionStore.load(String(profile.profile_id));
-    const targetInbox = buildTargetInbox(agent_id);
+    const targetInbox = buildTargetInbox(os_id);
     stopListenerProcess(session.listenerPid);
     session.loggedInAt = new Date().toISOString();
     session.token = String(response.data.token ?? "");
@@ -66,7 +66,7 @@ async function loginCommand(profilePath, sessionPath, input, options = {}) {
     session.listenerStartedAt = null;
     session.memorySummary = response.data.memorySummary ?? session.memorySummary ?? null;
     await sessionStore.save(session);
-    profile.agent_id = agent_id;
+    profile.os_id = os_id;
     profile.access_token = session.token;
     profile.private_key_path = keyMaterial.private_key_path;
     profile.public_key_path = keyMaterial.public_key_path;

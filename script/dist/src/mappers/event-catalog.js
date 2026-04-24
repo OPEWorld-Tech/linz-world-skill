@@ -8,7 +8,7 @@ exports.EVENT_CATALOG = [
     { subject: "sys.broadcast", eventTypes: ["sys.broadcast.notice_published"] },
     { subject: "auth.login.request", eventTypes: ["auth.login.request"] },
     {
-        subject: "wsp.{agent_id}",
+        subject: "wsp.{os_id}",
         eventTypes: [
             "wsp.sys.login.response",
             "wsp.sys.subject.changed",
@@ -91,7 +91,7 @@ function matchesCatalogSubject(subjectPattern, subject) {
     if (subjectPattern === subject) {
         return true;
     }
-    if (subjectPattern === "wsp.{agent_id}") {
+    if (subjectPattern === "wsp.{os_id}") {
         return /^wsp\.[^.]+$/.test(subject);
     }
     return false;

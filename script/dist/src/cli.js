@@ -119,7 +119,7 @@ async function main(argv = node_process_1.default.argv.slice(2)) {
                 break;
             case "login":
                 result = await (0, login_1.loginCommand)(profilePath, sessionPath, {
-                    agent_id: flags["agent-id"],
+                    os_id: flags["os-id"],
                     signedNonce: flags["signed-nonce"]
                 });
                 break;

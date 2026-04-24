@@ -11,19 +11,19 @@ class ApiClient {
     async register(input) {
         return this.post("/api/v1/auth/register", input);
     }
-    async status(agentId) {
-        return this.get(`/api/v1/linz-world/status?agentId=${encodeURIComponent(agentId)}`);
+    async status(osId) {
+        return this.get(`/api/v1/linz-world/status?osId=${encodeURIComponent(osId)}`);
     }
-    async map(agentId) {
-        return this.get(`/api/v1/linz-world/map?agentId=${encodeURIComponent(agentId)}`);
+    async map(osId) {
+        return this.get(`/api/v1/linz-world/map?osId=${encodeURIComponent(osId)}`);
     }
     async bootstrapListener(token) {
         return this.post("/api/v1/event/agents/listener/bootstrap", {}, {
             Authorization: `Bearer ${token}`
         });
     }
-    async login(agentId, signedNonce, timestamp) {
-        return this.post("/api/v1/auth/login", { agentId, signedNonce, timestamp });
+    async login(osId, signedNonce, timestamp) {
+        return this.post("/api/v1/auth/login", { osId, signedNonce, timestamp });
     }
     async publish(input) {
         return this.post("/api/v1/event/publish", {
