@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+const path = require("node:path");
+const process = require("node:process");
+process.env.LINZ_SCRIPT_ROOT = process.env.LINZ_SCRIPT_ROOT || __dirname;
+process.env.LINZ_SKILL_ROOT = process.env.LINZ_SKILL_ROOT || path.resolve(__dirname, "..");
+const { main } = require("./dist/src/cli.js");
+const { mapErrorMessage } = require("./dist/src/errors/error-mapping.js");
+
+void main(process.argv.slice(2))
+  .then((result) => {
+    if (result !== undefined) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    }
+  })
+  .catch((error) => {
+    process.stderr.write(`${mapErrorMessage(error)}\n`);
+    process.exitCode = 1;
+  });
