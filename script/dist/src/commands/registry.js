@@ -97,8 +97,9 @@ async function registryCommand(profilePath, input, options = {}) {
     profile.public_key_type = finalInput.public_key_type ?? keyMaterial.public_key_type;
     profile.public_key_fingerprint = finalInput.fingerprint ?? keyMaterial.fingerprint;
     profile.os_id = String(response.data.os_id ?? "");
+    profile.os_name = String(response.data.os_name ?? finalInput.agent_name ?? "");
     profile.soul_id = String(response.data.soul_id ?? "");
-    profile.access_token = String(response.data.access_token ?? "");
+    profile.access_token = String(response.data.access_token ?? response.data.token ?? "");
     profile.credential_state = "registered";
     profile.last_status_at = new Date().toISOString();
     await store.save(profile);

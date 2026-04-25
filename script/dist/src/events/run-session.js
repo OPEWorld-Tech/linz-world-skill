@@ -14,7 +14,7 @@ function resolveEventType(payload) {
 }
 async function runSession(options) {
     const client = options.client ?? new nats_client_1.NatsClient(options.nats_url);
-    const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 1_000;
+    const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 60_000;
     const reconnectDelayMs = options.reconnectDelayMs ?? 500;
     const heartbeatSubject = options.heartbeatSubject ?? "sys.heartbeat";
     const refreshEventType = options.refreshEventType ?? "wsp.sys.subject.changed";

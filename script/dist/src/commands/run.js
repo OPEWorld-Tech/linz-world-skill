@@ -29,6 +29,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
     const profile = await profileStore.load();
     const sessionStore = new session_state_1.FileSessionStateStore(sessionPath);
     const session = await sessionStore.load(String(profile.profile_id));
+    const profileId = String(profile.profile_id);
     const os_id = String(profile.os_id ?? "");
     (0, command_guards_1.ensureLoggedIn)(profile, session);
     (0, command_guards_1.ensureAuthorizationReady)(session, "run");
@@ -54,10 +55,25 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         node_process_1.default.once("SIGINT", handleSignal);
         node_process_1.default.once("SIGTERM", handleSignal);
     }
+    const loadCurrentListenerSession = async () => {
+        const latestSession = await sessionStore.load(profileId);
+        if (latestSession.listenerPid && latestSession.listenerPid !== node_process_1.default.pid) {
+            throw new Error("监听进程已被新的登录会话替换");
+        }
+        return latestSession;
+    };
+    const saveCurrentListenerSession = async (mutate) => {
+        const latestSession = await loadCurrentListenerSession();
+        mutate(latestSession);
+        await sessionStore.save(latestSession);
+        Object.assign(session, latestSession);
+        return latestSession;
+    };
     const markAuthorizationRefreshRequired = async () => {
-        session.authorization_state = "refresh_required";
+        await saveCurrentListenerSession((latestSession) => {
+            latestSession.authorization_state = "refresh_required";
+        });
         profile.authorization_state = "refresh_required";
-        await sessionStore.save(session);
         await profileStore.save(profile);
     };
     const bootstrapAuthorizationView = async () => {
@@ -65,11 +81,12 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         // 后续集成 NATS auth callout 后，应由 broker 基于同一业务 JWT 在建连阶段完成最终鉴权。
         const response = await apiClient.bootstrapListener(session.token);
         const allowedSubjects = uniq([...(response.data.allowedSubjects ?? []).map(String), buildTargetInbox(os_id)]);
-        session.allowedSubjects = allowedSubjects;
-        session.allowedEventTypes = (response.data.allowedEventTypes ?? allowedSubjects).map(String);
-        session.authorization_state = "valid";
+        await saveCurrentListenerSession((latestSession) => {
+            latestSession.allowedSubjects = allowedSubjects;
+            latestSession.allowedEventTypes = (response.data.allowedEventTypes ?? allowedSubjects).map(String);
+            latestSession.authorization_state = "valid";
+        });
         profile.authorization_state = "valid";
-        await sessionStore.save(session);
         await profileStore.save(profile);
         return {
             ...response.data,
@@ -78,8 +95,13 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         };
     };
     await bootstrapAuthorizationView();
-    session.online = true;
-    await sessionStore.save(session);
+    await saveCurrentListenerSession((latestSession) => {
+        latestSession.online = true;
+        if (!latestSession.listenerPid) {
+            latestSession.listenerPid = node_process_1.default.pid;
+            latestSession.listenerStartedAt = new Date().toISOString();
+        }
+    });
     try {
         await (0, run_session_1.runSession)({
             client: natsClient,
@@ -106,9 +128,10 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
                 await markAuthorizationRefreshRequired();
             },
             onSubjectsChanged: async (subjects) => {
-                session.allowedSubjects = subjects;
-                session.authorization_state = "valid";
-                await sessionStore.save(session);
+                await saveCurrentListenerSession((latestSession) => {
+                    latestSession.allowedSubjects = subjects;
+                    latestSession.authorization_state = "valid";
+                });
             }
         });
     }
@@ -117,8 +140,17 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
             node_process_1.default.removeListener("SIGINT", handleSignal);
             node_process_1.default.removeListener("SIGTERM", handleSignal);
         }
-        session.online = false;
-        await sessionStore.save(session);
+        await options.beforeFinalize?.();
+        const latestSession = await sessionStore.load(profileId);
+        if (!latestSession.listenerPid || latestSession.listenerPid === node_process_1.default.pid) {
+            latestSession.online = false;
+            if (latestSession.listenerPid === node_process_1.default.pid) {
+                latestSession.listenerPid = null;
+                latestSession.listenerStartedAt = null;
+            }
+            await sessionStore.save(latestSession);
+            Object.assign(session, latestSession);
+        }
     }
     return { online: false, authorization_state: session.authorization_state };
 }

@@ -14,6 +14,7 @@ function createDefaultProfile(overrides = {}) {
         public_key_type: overrides.public_key_type,
         public_key_fingerprint: overrides.public_key_fingerprint,
         os_id: overrides.os_id,
+        os_name: overrides.os_name,
         soul_id: overrides.soul_id,
         access_token: overrides.access_token,
         credential_state: overrides.credential_state ?? "pending",
