@@ -18,6 +18,9 @@ function createDefaultProfile(overrides = {}) {
         os_name: overrides.os_name,
         soul_id: overrides.soul_id,
         access_token: overrides.access_token,
+        agent_runtime: overrides.agent_runtime,
+        agent_runtime_detection: overrides.agent_runtime_detection,
+        agent_event_hook: overrides.agent_event_hook,
         credential_state: overrides.credential_state ?? "pending",
         authorization_state: overrides.authorization_state ?? "unknown",
         last_status_at: overrides.last_status_at ?? null

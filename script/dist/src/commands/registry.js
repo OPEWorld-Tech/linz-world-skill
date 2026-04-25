@@ -41,6 +41,7 @@ const node_process_1 = __importDefault(require("node:process"));
 const readline = __importStar(require("node:readline/promises"));
 const api_client_1 = require("../clients/api-client");
 const profile_store_1 = require("../config/profile-store");
+const runtime_detection_1 = require("../config/runtime-detection");
 const key_material_1 = require("../utils/key-material");
 async function promptForMissingFields(input, profile, options = {}) {
     const prompt = options.prompt ?? (async (label, initialValue = "") => {
@@ -75,9 +76,6 @@ async function promptForMissingFields(input, profile, options = {}) {
     if (!nextInput.persona_seed) {
         nextInput.persona_seed = await promptRequired("请填写你的主人在长期使用中沉淀出的性格、偏好、表达风格、价值取向；建议 1-3 句，必须同时包含有点和缺点", "");
     }
-    if (!nextInput.runtime_type) {
-        nextInput.runtime_type = await prompt("请告诉我你运行在那种Agent框架中", String(profile.agent_runtime_type ?? "Hermes-Agent"));
-    }
     return nextInput;
 }
 async function registryCommand(profilePath, input, options = {}) {
@@ -85,9 +83,19 @@ async function registryCommand(profilePath, input, options = {}) {
     const profile = await store.load();
     const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
     const keyMaterial = await (0, key_material_1.ensureLocalKeyMaterial)(profile);
-    const finalInput = await promptForMissingFields(input, profile, options);
+    const detectedRuntime = await (0, runtime_detection_1.detectAgentRuntime)(profile, options.runtimeDetectionOptions);
+    const finalInput = await promptForMissingFields({
+        ...input,
+        runtime_type: detectedRuntime.runtime_type,
+        metadata: {
+            ...(input.metadata ?? {}),
+            runtime_type: detectedRuntime.runtime_type,
+            runtime_detection: JSON.stringify(detectedRuntime.agent_runtime_detection)
+        }
+    }, profile, options);
     const response = await apiClient.register({
         ...finalInput,
+        runtime_detection: detectedRuntime.agent_runtime_detection,
         publicKey: finalInput.publicKey ?? keyMaterial.publicKeyPem,
         publicKeyType: finalInput.public_key_type ?? keyMaterial.public_key_type,
         fingerprint: finalInput.fingerprint ?? keyMaterial.fingerprint
@@ -96,6 +104,9 @@ async function registryCommand(profilePath, input, options = {}) {
     profile.public_key_path = keyMaterial.public_key_path;
     profile.public_key_type = finalInput.public_key_type ?? keyMaterial.public_key_type;
     profile.public_key_fingerprint = finalInput.fingerprint ?? keyMaterial.fingerprint;
+    profile.agent_runtime_type = finalInput.runtime_type;
+    profile.agent_runtime = detectedRuntime.agent_runtime ?? profile.agent_runtime;
+    profile.agent_runtime_detection = detectedRuntime.agent_runtime_detection;
     profile.os_id = String(response.data.os_id ?? "");
     profile.os_name = String(response.data.os_name ?? finalInput.agent_name ?? "");
     profile.soul_id = String(response.data.soul_id ?? "");

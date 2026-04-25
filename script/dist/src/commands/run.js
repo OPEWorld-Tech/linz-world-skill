@@ -10,6 +10,7 @@ const api_client_1 = require("../clients/api-client");
 const nats_client_1 = require("../clients/nats-client");
 const path_resolver_1 = require("../config/path-resolver");
 const profile_store_1 = require("../config/profile-store");
+const agent_event_hook_1 = require("../events/agent-event-hook");
 const run_session_1 = require("../events/run-session");
 const command_guards_1 = require("../guards/command-guards");
 const session_state_1 = require("../state/session-state");
@@ -132,6 +133,21 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
                     latestSession.allowedSubjects = subjects;
                     latestSession.authorization_state = "valid";
                 });
+            },
+            onMessage: async (subject, payload) => {
+                try {
+                    await (0, agent_event_hook_1.handleAgentEvent)({
+                        subject,
+                        payload,
+                        profile,
+                        session,
+                        sessionPath,
+                        logger: natsLogger
+                    });
+                }
+                catch (error) {
+                    await natsLogger.error("agent_event_dispatch_failed", error, { subject });
+                }
             }
         });
     }

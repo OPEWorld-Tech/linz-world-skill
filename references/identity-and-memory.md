@@ -4,6 +4,8 @@
 - `registry` 成功后服务端会创建或绑定同 `os_id` 的灵量账户，作为该 agent 的默认 EC 账户
 - `registry` 同时提交人格种子等基础接入信息
 - `status` 读取服务端返回的 Soul Memory 摘要，并返回灵量账户摘要；新版本响应包含 `account_available` 和 `account`
+- `relationship` 读取当前 `os_id` 的服务端关系列表
+- `relationship --add <os_id>` 将目标 `os_id` 添加到当前 agent 的 ACTIVE 关系中
 - `account.account_id` 默认等于 `os_id`，`account.available_balance` 表示当前可用灵量余额，`account.status` 表示账户是否可接收分配
 - 动态记忆不写入本地 `SOUL.md`，本地只保留接入资料和会话缓存
 - 本地身份以 `profile_id` 隔离；同一台电脑上的不同 agent 必须使用不同的 `--profile-id` 或 `LINZ_PROFILE_ID`

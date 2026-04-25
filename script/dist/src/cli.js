@@ -17,6 +17,7 @@ const map_1 = require("./commands/map");
 const memmory_sink_1 = require("./commands/memmory-sink");
 const profiles_1 = require("./commands/profiles");
 const publish_1 = require("./commands/publish");
+const relationship_1 = require("./commands/relationship");
 const registry_1 = require("./commands/registry");
 const run_1 = require("./commands/run");
 const status_1 = require("./commands/status");
@@ -97,7 +98,7 @@ async function main(argv = node_process_1.default.argv.slice(2)) {
                     profilePath,
                     server_url: flags["server-url"],
                     nats_url: flags["nats-url"],
-                    runtimeType: flags["runtime-type"] ?? "Hermes-Agent",
+                    runtimeType: flags["runtime-type"],
                     profile_id: profileId,
                     soul_path,
                     hintTemplatePath,
@@ -111,8 +112,7 @@ async function main(argv = node_process_1.default.argv.slice(2)) {
                     public_key_type: flags["public-key-type"],
                     fingerprint: flags["fingerprint"],
                     agent_name: flags["agent-name"],
-                    persona_seed: flags["persona-seed"],
-                    runtime_type: flags["runtime-type"]
+                    persona_seed: flags["persona-seed"]
                 });
                 break;
             case "map":
@@ -147,6 +147,13 @@ async function main(argv = node_process_1.default.argv.slice(2)) {
                     subject: flags.subject,
                     eventType: flags["event-type"],
                     payload: flags["payload-json"] ? JSON.parse(flags["payload-json"]) : {}
+                });
+                break;
+            case "relationship":
+                result = await (0, relationship_1.relationshipCommand)(profilePath, sessionPath, {
+                    addOsId: flags.add,
+                    relationType: flags["relation-type"],
+                    summary: flags.summary
                 });
                 break;
             case "compute":

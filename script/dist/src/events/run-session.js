@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runSession = runSession;
 const promises_1 = require("node:timers/promises");
+const node_crypto_1 = require("node:crypto");
 const nats_client_1 = require("../clients/nats-client");
 function normalizeSubjects(subjects) {
     return [...new Set((subjects ?? []).map(String).filter(Boolean))];
@@ -27,6 +28,7 @@ async function runSession(options) {
     let activeSubjects = normalizeSubjects(options.subjects);
     let unsubscribers = [];
     let controlChain = Promise.resolve();
+    let messageChain = Promise.resolve();
     const isStopped = () => stopRequested || signal?.aborted === true || Date.now() - startedAt >= maxRuntimeMs;
     const cleanupSubscriptions = () => {
         unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -42,7 +44,15 @@ async function runSession(options) {
         cleanupSubscriptions();
         activeSubjects = normalizeSubjects(subjects);
         unsubscribers = activeSubjects.map((subject) => client.subscribe(subject, (payload) => {
-            options.onMessage?.(subject, payload);
+            if (options.onMessage) {
+                messageChain = messageChain
+                    .then(async () => {
+                    await options.onMessage(subject, payload);
+                })
+                    .catch((error) => {
+                    stopWithError(error);
+                });
+            }
             if (resolveEventType(payload) === refreshEventType) {
                 controlChain = controlChain
                     .then(async () => {
@@ -85,9 +95,15 @@ async function runSession(options) {
     try {
         while (!isStopped()) {
             try {
+                const emittedAt = new Date().toISOString();
                 await client.publish(heartbeatSubject, {
-                    ...options.heartbeatPayload,
-                    emittedAt: new Date().toISOString()
+                    event_type: "sys.heartbeat.report",
+                    event_id: (0, node_crypto_1.randomUUID)(),
+                    payload: {
+                        ...options.heartbeatPayload,
+                        emitted_at: emittedAt,
+                        emittedAt
+                    }
                 });
                 await options.onHeartbeat?.();
             }
@@ -100,9 +116,11 @@ async function runSession(options) {
             }
             await (0, promises_1.setTimeout)(heartbeatIntervalMs);
             await controlChain;
+            await messageChain;
         }
     }
     finally {
+        await messageChain;
         cleanupSubscriptions();
         await client.disconnect();
         await options.onStopped?.();

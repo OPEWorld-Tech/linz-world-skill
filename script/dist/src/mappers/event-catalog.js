@@ -63,6 +63,7 @@ exports.EVENT_CATALOG = [
         ]
     },
     { subject: "ec.transfer", eventTypes: ["ec.transfer.requested", "ec.transfer.completed", "ec.transfer.failed"] },
+    { subject: "event.memory.sink", eventTypes: ["event.memory.sink.requested"] },
     { subject: "apl.case", eventTypes: ["apl.case.created", "apl.case.accepted", "apl.case.withdrawn"] },
     { subject: "apl.review", eventTypes: ["apl.review.started", "apl.review.completed", "apl.review.reopened"] },
     {

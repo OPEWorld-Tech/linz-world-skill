@@ -5,6 +5,7 @@ const promises_1 = require("node:fs/promises");
 const install_cli_1 = require("./install-cli");
 const profile_schema_1 = require("../config/profile-schema");
 const profile_store_1 = require("../config/profile-store");
+const runtime_detection_1 = require("../config/runtime-detection");
 const soul_tail_block_1 = require("../utils/soul-tail-block");
 function ensureNodeRuntime() {
     const major = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10);
@@ -27,6 +28,7 @@ async function installCommand(args) {
         : null;
     const store = new profile_store_1.FileProfileStore(args.profilePath);
     const current = await store.load();
+    const runtime = await (0, runtime_detection_1.detectAgentRuntime)(current, args.runtimeDetectionOptions);
     const credential_state = current.os_id && current.soul_id
         ? current.credential_state
         : "installed";
@@ -35,7 +37,9 @@ async function installCommand(args) {
         profile_id: args.profile_id ?? current.profile_id,
         server_url: args.server_url,
         nats_url: args.nats_url,
-        agent_runtime_type: args.runtimeType,
+        agent_runtime_type: runtime.runtime_type,
+        agent_runtime: runtime.agent_runtime ?? current.agent_runtime,
+        agent_runtime_detection: runtime.agent_runtime_detection,
         soul_path: args.soul_path,
         credential_state
     });

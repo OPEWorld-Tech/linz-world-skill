@@ -9,6 +9,9 @@ async function computeCommand(profilePath, sessionPath, input) {
     const profile = await new profile_store_1.FileProfileStore(profilePath).load();
     const session = await new session_state_1.FileSessionStateStore(sessionPath).load(String(profile.profile_id));
     (0, command_guards_1.ensureWorldActionReady)(profile, session, "compute");
+    if (input.apiKey) {
+        throw new Error("compute 必须使用登录后的 JWT token，不能显式指定 api-key");
+    }
     const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
     const response = await apiClient.compute({
         ...input,

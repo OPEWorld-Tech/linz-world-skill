@@ -34,6 +34,18 @@ class ApiClient {
             candidateMetadata: input.candidateMetadata ?? {}
         });
     }
+    async listRelationships(osId) {
+        return this.get(`/api/v1/memory/relationships/${encodeURIComponent(osId)}`);
+    }
+    async addRelationship(osId, input) {
+        return this.post(`/api/v1/memory/relationships/${encodeURIComponent(osId)}`, {
+            target_os_id: input.target_os_id,
+            relation_type: input.relation_type ?? "OTHER",
+            status: input.status ?? "ACTIVE",
+            summary: input.summary ?? "手动添加关系",
+            operator_id: input.operator_id ?? osId
+        });
+    }
     async compute(input) {
         const bearerToken = input.token ?? input.apiKey;
         return this.post("/api/v1/compute/chat", {
