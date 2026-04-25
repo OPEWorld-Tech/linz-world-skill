@@ -15,6 +15,7 @@ const login_1 = require("./commands/login");
 const logout_1 = require("./commands/logout");
 const map_1 = require("./commands/map");
 const memmory_sink_1 = require("./commands/memmory-sink");
+const profiles_1 = require("./commands/profiles");
 const publish_1 = require("./commands/publish");
 const registry_1 = require("./commands/registry");
 const run_1 = require("./commands/run");
@@ -67,15 +68,17 @@ async function main(argv = node_process_1.default.argv.slice(2)) {
         node_process_1.default.env.LINZ_SKILL_ROOT ??
         node_path_1.default.resolve(node_process_1.default.cwd(), "skill/linz-world-skill");
     const scriptRoot = flags["script-root"] ?? node_process_1.default.env.LINZ_SCRIPT_ROOT ?? node_path_1.default.resolve(skillRoot, "script");
-    const profilePath = flags["profile-path"] ?? (0, path_resolver_1.getDefaultProfilePath)();
-    const sessionPath = flags["session-path"] ?? (0, path_resolver_1.getDefaultSessionPath)();
-    const soul_path = flags["soul-path"] ?? (0, path_resolver_1.getDefaultSoulPath)();
+    const profileId = (0, path_resolver_1.resolveProfileId)(flags["profile-id"] ?? flags["agent-id"]);
+    const profilePath = flags["profile-path"] ?? (0, path_resolver_1.getDefaultProfilePath)(undefined, profileId);
+    const sessionPath = flags["session-path"] ?? (0, path_resolver_1.getDefaultSessionPath)(undefined, profileId);
+    const soul_path = flags["soul-path"] ?? (0, path_resolver_1.getDefaultSoulPath)(undefined, profileId);
     const hintTemplatePath = flags["hint-template-path"] ?? node_path_1.default.resolve(skillRoot, "assets/templates/soul-tail-block.md");
     await logger.info("command_started", {
         command,
         subcommand: subcommand ?? null,
         argv: sanitizeArgv(argv),
         flags: sanitizeCliContext(flags),
+        profileId,
         profilePath,
         sessionPath,
         soul_path
@@ -95,6 +98,7 @@ async function main(argv = node_process_1.default.argv.slice(2)) {
                     server_url: flags["server-url"],
                     nats_url: flags["nats-url"],
                     runtimeType: flags["runtime-type"] ?? "Hermes-Agent",
+                    profile_id: profileId,
                     soul_path,
                     hintTemplatePath,
                     launcherSourceDir: scriptRoot,
@@ -116,6 +120,12 @@ async function main(argv = node_process_1.default.argv.slice(2)) {
                 break;
             case "status":
                 result = await (0, status_1.statusCommand)(profilePath, sessionPath);
+                break;
+            case "profiles":
+                result = await (0, profiles_1.profilesCommand)({
+                    profilesDir: (0, path_resolver_1.getLinzProfilesDir)(),
+                    includeAll: flags.all === "true"
+                });
                 break;
             case "login":
                 result = await (0, login_1.loginCommand)(profilePath, sessionPath, {

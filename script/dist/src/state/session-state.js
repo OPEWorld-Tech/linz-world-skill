@@ -7,9 +7,11 @@ exports.FileSessionStateStore = void 0;
 exports.createDefaultSessionState = createDefaultSessionState;
 const promises_1 = require("node:fs/promises");
 const node_path_1 = __importDefault(require("node:path"));
-function createDefaultSessionState(profile_id = "local-default") {
+const path_resolver_1 = require("../config/path-resolver");
+function createDefaultSessionState(profile_id = (0, path_resolver_1.getDefaultProfileId)()) {
+    const resolvedProfileId = (0, path_resolver_1.resolveProfileId)(profile_id);
     return {
-        profile_id,
+        profile_id: resolvedProfileId,
         loggedInAt: null,
         online: false,
         allowedSubjects: [],

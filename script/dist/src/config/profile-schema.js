@@ -2,9 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createDefaultProfile = createDefaultProfile;
 exports.validateProfile = validateProfile;
+const path_resolver_1 = require("./path-resolver");
 function createDefaultProfile(overrides = {}) {
     return {
-        profile_id: overrides.profile_id ?? "local-default",
+        profile_id: (0, path_resolver_1.resolveProfileId)(String(overrides.profile_id ?? (0, path_resolver_1.getDefaultProfileId)())),
         agent_runtime_type: overrides.agent_runtime_type ?? "Hermes-Agent",
         server_url: overrides.server_url ?? "http://127.0.0.1:8080",
         nats_url: overrides.nats_url ?? "nats://127.0.0.1:4222",

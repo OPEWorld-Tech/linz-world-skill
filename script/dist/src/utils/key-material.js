@@ -13,7 +13,7 @@ function buildFingerprint(publicKeyPem) {
     return (0, node_crypto_1.createHash)("sha256").update(publicKeyPem).digest("hex");
 }
 async function ensureLocalKeyMaterial(profile) {
-    const profile_id = String(profile.profile_id ?? "local-default");
+    const profile_id = (0, path_resolver_1.resolveProfileId)(String(profile.profile_id ?? (0, path_resolver_1.getDefaultProfileId)()));
     const private_key_path = profile.private_key_path ?? (0, path_resolver_1.getDefaultPrivateKeyPath)(profile_id);
     const public_key_path = profile.public_key_path ?? (0, path_resolver_1.getDefaultPublicKeyPath)(profile_id);
     try {

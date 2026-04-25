@@ -27,13 +27,17 @@ async function installCommand(args) {
         : null;
     const store = new profile_store_1.FileProfileStore(args.profilePath);
     const current = await store.load();
+    const credential_state = current.os_id && current.soul_id
+        ? current.credential_state
+        : "installed";
     const profile = (0, profile_schema_1.createDefaultProfile)({
         ...current,
+        profile_id: args.profile_id ?? current.profile_id,
         server_url: args.server_url,
         nats_url: args.nats_url,
         agent_runtime_type: args.runtimeType,
         soul_path: args.soul_path,
-        credential_state: "installed"
+        credential_state
     });
     await store.save(profile);
     const hintBlock = await (0, promises_1.readFile)(args.hintTemplatePath, "utf8");
