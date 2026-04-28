@@ -202,6 +202,9 @@ function resolveProfileSelectionMode(command, subcommand, flags) {
     if (command === "login") {
         return "login";
     }
+    if (command === "compute" && flags.token) {
+        return "none";
+    }
     if (command === "profiles" ||
         command === "install-cli" ||
         command === "install" ||
@@ -355,8 +358,11 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
             case "compute":
                 result = await (0, compute_1.computeCommand)(profilePath, sessionPath, {
                     apiKey: flags["api-key"],
+                    token: flags.token,
+                    serverUrl: flags.server ?? flags["server-url"],
                     model: flags.model,
                     message: flags.message,
+                    system: flags.system,
                     stream: flags.stream === "true"
                 });
                 break;

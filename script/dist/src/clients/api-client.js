@@ -58,9 +58,14 @@ class ApiClient {
     }
     async compute(input) {
         const bearerToken = input.token ?? input.apiKey;
+        const messages = [];
+        if (input.system) {
+            messages.push({ role: "system", content: input.system });
+        }
+        messages.push({ role: "user", content: input.message });
         return this.post("/api/v1/compute/chat", {
             model: input.model,
-            messages: [{ role: "user", content: input.message }],
+            messages,
             stream: input.stream ?? false
         }, {
             Authorization: `Bearer ${bearerToken ?? ""}`
