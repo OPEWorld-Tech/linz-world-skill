@@ -3,7 +3,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.runCommand = void 0;
 exports.listenCommand = listenCommand;
 const node_process_1 = __importDefault(require("node:process"));
 const api_client_1 = require("../clients/api-client");
@@ -13,6 +12,7 @@ const profile_store_1 = require("../config/profile-store");
 const agent_event_hook_1 = require("../events/agent-event-hook");
 const run_session_1 = require("../events/run-session");
 const command_guards_1 = require("../guards/command-guards");
+const settlement_state_1 = require("../state/settlement-state");
 const session_state_1 = require("../state/session-state");
 const jsonl_logger_1 = require("../utils/jsonl-logger");
 function isAuthorizationFailure(error) {
@@ -30,10 +30,13 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
     const profile = await profileStore.load();
     const sessionStore = new session_state_1.FileSessionStateStore(sessionPath);
     const session = await sessionStore.load(String(profile.profile_id));
+    const settlementStore = new settlement_state_1.FileSettlementStateStore((0, settlement_state_1.deriveSettlementStatePath)(sessionPath));
+    let settlementState = await settlementStore.load(String(profile.profile_id));
     const profileId = String(profile.profile_id);
     const os_id = String(profile.os_id ?? "");
+    const os_name = String(profile.os_name ?? profile.os_id ?? "");
     (0, command_guards_1.ensureLoggedIn)(profile, session);
-    (0, command_guards_1.ensureAuthorizationReady)(session, "run");
+    (0, command_guards_1.ensureAuthorizationReady)(session, "监听");
     if (session.allowedSubjects.length === 0) {
         throw new Error("当前没有可监听的授权主题，请先执行 login 或 map");
     }
@@ -46,11 +49,32 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
     });
     const controller = options.signal ? null : new AbortController();
     const signal = options.signal ?? controller?.signal;
+    const unreadReplayIntervalMs = options.unreadReplayIntervalMs ?? 2_000;
+    let replayTimer = null;
+    let replayRunning = false;
+    let replayChain = Promise.resolve();
     const stopSession = () => {
         controller?.abort();
     };
     const handleSignal = () => {
         stopSession();
+    };
+    const scheduleUnreadReplay = () => {
+        if (replayRunning) {
+            return;
+        }
+        replayRunning = true;
+        replayChain = (0, agent_event_hook_1.replayUnreadAgentEvents)({
+            profile,
+            session,
+            sessionPath,
+            logger: natsLogger
+        })
+            .then(() => undefined)
+            .catch((error) => natsLogger.error("agent_unread_replay_failed", error))
+            .finally(() => {
+            replayRunning = false;
+        });
     };
     if (controller) {
         node_process_1.default.once("SIGINT", handleSignal);
@@ -103,12 +127,15 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
             latestSession.listenerStartedAt = new Date().toISOString();
         }
     });
+    if (unreadReplayIntervalMs > 0) {
+        replayTimer = setInterval(scheduleUnreadReplay, unreadReplayIntervalMs);
+    }
     try {
         await (0, run_session_1.runSession)({
             client: natsClient,
             nats_url: profile.nats_url,
             subjects: session.allowedSubjects,
-            heartbeatPayload: { os_id },
+            heartbeatPayload: { os_id, os_name },
             heartbeatIntervalMs: options.heartbeatIntervalMs,
             reconnectDelayMs: options.reconnectDelayMs,
             maxRuntimeMs: options.maxRuntimeMs,
@@ -135,6 +162,11 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
                 });
             },
             onMessage: async (subject, payload) => {
+                const nextSettlementState = (0, settlement_state_1.applySettlementEvent)(settlementState, subject, payload);
+                if (nextSettlementState !== settlementState) {
+                    settlementState = nextSettlementState;
+                    await settlementStore.save(settlementState);
+                }
                 try {
                     await (0, agent_event_hook_1.handleAgentEvent)({
                         subject,
@@ -152,6 +184,11 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         });
     }
     finally {
+        if (replayTimer) {
+            clearInterval(replayTimer);
+            replayTimer = null;
+        }
+        await replayChain;
         if (controller) {
             node_process_1.default.removeListener("SIGINT", handleSignal);
             node_process_1.default.removeListener("SIGTERM", handleSignal);
@@ -170,4 +207,3 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
     }
     return { online: false, authorization_state: session.authorization_state };
 }
-exports.runCommand = listenCommand;

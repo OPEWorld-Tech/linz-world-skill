@@ -31,13 +31,26 @@ class FileSessionStateStore {
         this.filePath = filePath;
     }
     async load(profile_id = "local-default") {
+        const expectedProfileId = (0, path_resolver_1.resolveProfileId)(profile_id);
+        let content;
         try {
-            const content = await (0, promises_1.readFile)(this.filePath, "utf8");
-            return { ...createDefaultSessionState(profile_id), ...JSON.parse(content) };
+            content = await (0, promises_1.readFile)(this.filePath, "utf8");
         }
         catch {
-            return createDefaultSessionState(profile_id);
+            return createDefaultSessionState(expectedProfileId);
         }
+        let parsed;
+        try {
+            parsed = JSON.parse(content);
+        }
+        catch {
+            return createDefaultSessionState(expectedProfileId);
+        }
+        const actualProfileId = parsed.profile_id ? (0, path_resolver_1.resolveProfileId)(String(parsed.profile_id)) : expectedProfileId;
+        if (actualProfileId !== expectedProfileId) {
+            throw new Error(`本地 session profile_id 不匹配: 期望 ${expectedProfileId}，实际 ${actualProfileId}`);
+        }
+        return { ...createDefaultSessionState(expectedProfileId), ...parsed, profile_id: expectedProfileId };
     }
     async save(state) {
         await (0, promises_1.mkdir)(node_path_1.default.dirname(this.filePath), { recursive: true });

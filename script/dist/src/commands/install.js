@@ -34,11 +34,11 @@ async function installCommand(args) {
         : "installed";
     const profile = (0, profile_schema_1.createDefaultProfile)({
         ...current,
-        profile_id: args.profile_id ?? current.profile_id,
+        profile_id: args.os_id ?? args.profile_id ?? current.profile_id,
         server_url: args.server_url,
         nats_url: args.nats_url,
-        agent_runtime_type: runtime.runtime_type,
-        agent_runtime: runtime.agent_runtime ?? current.agent_runtime,
+        agent_runtime_type: args.runtimeType ?? current.agent_runtime_type,
+        agent_runtime: current.agent_runtime,
         agent_runtime_detection: runtime.agent_runtime_detection,
         soul_path: args.soul_path,
         credential_state

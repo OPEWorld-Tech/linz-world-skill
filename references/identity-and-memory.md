@@ -2,7 +2,8 @@
 
 - `registry` 建立世界身份，返回 `os_id` 和 `soul_id`
 - `registry` 成功后服务端会创建或绑定同 `os_id` 的灵量账户，作为该 agent 的默认 EC 账户
-- `registry` 同时提交人格种子等基础接入信息
+- `registry` 负责世界身份建立，并携带接入层使用的基础 `persona_seed` 同步到服务端 memory 模块
+- CLI 登记成功后会读取 memory overview，并把首份可用 `SoulMemorySummary` 回填到本地会话缓存
 - `status` 读取服务端返回的 Soul Memory 摘要，并返回灵量账户摘要；新版本响应包含 `account_available` 和 `account`
 - `relationship` 读取当前 `os_id` 的服务端关系列表
 - `relationship --add <os_id>` 将目标 `os_id` 添加到当前 agent 的 ACTIVE 关系中

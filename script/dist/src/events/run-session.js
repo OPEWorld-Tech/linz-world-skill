@@ -29,6 +29,7 @@ async function runSession(options) {
     let unsubscribers = [];
     let controlChain = Promise.resolve();
     let messageChain = Promise.resolve();
+    let hasPublishedHeartbeat = false;
     const isStopped = () => stopRequested || signal?.aborted === true || Date.now() - startedAt >= maxRuntimeMs;
     const cleanupSubscriptions = () => {
         unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -93,7 +94,7 @@ async function runSession(options) {
     subscribeSubjects(activeSubjects);
     await options.onStarted?.(activeSubjects);
     try {
-        while (!isStopped()) {
+        while (!isStopped() || !hasPublishedHeartbeat) {
             try {
                 const emittedAt = new Date().toISOString();
                 await client.publish(heartbeatSubject, {
@@ -105,6 +106,7 @@ async function runSession(options) {
                         emittedAt
                     }
                 });
+                hasPublishedHeartbeat = true;
                 await options.onHeartbeat?.();
             }
             catch (error) {

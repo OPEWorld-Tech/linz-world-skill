@@ -42,7 +42,15 @@ const readline = __importStar(require("node:readline/promises"));
 const api_client_1 = require("../clients/api-client");
 const profile_store_1 = require("../config/profile-store");
 const runtime_detection_1 = require("../config/runtime-detection");
+const session_state_1 = require("../state/session-state");
 const key_material_1 = require("../utils/key-material");
+function resolveMemorySummary(overview) {
+    return (overview?.summary_projection?.content ??
+        overview?.summaryProjection?.content ??
+        overview?.soul_memory?.summary ??
+        overview?.soulMemory?.summary ??
+        null);
+}
 async function promptForMissingFields(input, profile, options = {}) {
     const prompt = options.prompt ?? (async (label, initialValue = "") => {
         const rl = readline.createInterface({
@@ -84,12 +92,13 @@ async function registryCommand(profilePath, input, options = {}) {
     const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
     const keyMaterial = await (0, key_material_1.ensureLocalKeyMaterial)(profile);
     const detectedRuntime = await (0, runtime_detection_1.detectAgentRuntime)(profile, options.runtimeDetectionOptions);
+    const runtimeType = input.runtime_type ?? input.runtimeType ?? profile.agent_runtime_type;
     const finalInput = await promptForMissingFields({
         ...input,
-        runtime_type: detectedRuntime.runtime_type,
+        runtime_type: runtimeType,
         metadata: {
             ...(input.metadata ?? {}),
-            runtime_type: detectedRuntime.runtime_type,
+            runtime_type: runtimeType,
             runtime_detection: JSON.stringify(detectedRuntime.agent_runtime_detection)
         }
     }, profile, options);
@@ -105,7 +114,6 @@ async function registryCommand(profilePath, input, options = {}) {
     profile.public_key_type = finalInput.public_key_type ?? keyMaterial.public_key_type;
     profile.public_key_fingerprint = finalInput.fingerprint ?? keyMaterial.fingerprint;
     profile.agent_runtime_type = finalInput.runtime_type;
-    profile.agent_runtime = detectedRuntime.agent_runtime ?? profile.agent_runtime;
     profile.agent_runtime_detection = detectedRuntime.agent_runtime_detection;
     profile.os_id = String(response.data.os_id ?? "");
     profile.os_name = String(response.data.os_name ?? finalInput.agent_name ?? "");
@@ -113,6 +121,23 @@ async function registryCommand(profilePath, input, options = {}) {
     profile.access_token = String(response.data.access_token ?? response.data.token ?? "");
     profile.credential_state = "registered";
     profile.last_status_at = new Date().toISOString();
-    await store.save(profile);
-    return response.data;
+    const resolvedProfilePath = await (0, profile_store_1.saveProfileUsingOsIdFileName)(store, profile);
+    let memorySummary = null;
+    if (options.sessionPath && profile.os_id) {
+        const overviewResponse = await apiClient.getAgentMemoryOverview(String(profile.os_id));
+        memorySummary = resolveMemorySummary(overviewResponse.data);
+        const sessionStore = new session_state_1.FileSessionStateStore(options.sessionPath);
+        const session = await sessionStore.load(String(profile.profile_id));
+        session.memorySummary = memorySummary;
+        await sessionStore.save(session);
+        profile.memory_initialized_at = new Date().toISOString();
+        await new profile_store_1.FileProfileStore(resolvedProfilePath).save(profile);
+        if (resolvedProfilePath !== store.path()) {
+            await store.save(profile);
+        }
+    }
+    return {
+        ...response.data,
+        memorySummary
+    };
 }

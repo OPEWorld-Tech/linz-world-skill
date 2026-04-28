@@ -6,10 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildAgentEventEnvelope = buildAgentEventEnvelope;
 exports.shouldDispatchAgentEvent = shouldDispatchAgentEvent;
 exports.appendAgentInboxEvent = appendAgentInboxEvent;
+exports.replayUnreadAgentEvents = replayUnreadAgentEvents;
 exports.handleAgentEvent = handleAgentEvent;
 const node_child_process_1 = require("node:child_process");
-const promises_1 = require("node:fs/promises");
 const node_path_1 = __importDefault(require("node:path"));
+const connection_config_1 = require("../config/connection-config");
+const path_resolver_1 = require("../config/path-resolver");
+const box_state_1 = require("../state/box-state");
 const runtime_adapter_1 = require("./runtime-adapter");
 function asRecord(value) {
     return value && typeof value === "object" ? value : {};
@@ -21,6 +24,73 @@ function resolveEventType(payload) {
 function resolveEventId(payload) {
     const record = asRecord(payload);
     return String(record.event_id ?? record.eventId ?? "");
+}
+function resolveNestedPayload(event) {
+    return asRecord(asRecord(event).payload);
+}
+function resolveChatSenderOsId(event) {
+    const payload = resolveNestedPayload(event);
+    return String(payload.from ?? payload.from_os_id ?? payload.fromOsId ?? "").trim();
+}
+function isChatMessageEvent(event) {
+    return resolveEventType(event) === "wsp.chat.message.sent";
+}
+function isHandledChatFromPeer(record, peerOsId) {
+    const event = asRecord(asRecord(record).event);
+    return isChatMessageEvent(event) && resolveChatSenderOsId(event) === peerOsId;
+}
+function isChatLimitPolicyForPeer(record, peerOsId) {
+    const result = asRecord(asRecord(record).result);
+    return (String(asRecord(record).handler_type ?? "") === "policy" &&
+        result.suppressed === "chat_auto_reply_limit" &&
+        String(result.peer_os_id ?? "") === peerOsId);
+}
+function resolveRecordTime(record) {
+    const value = String(asRecord(record).handled_at ??
+        asRecord(record).time ??
+        asRecord(record).failed_at ??
+        "");
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) ? timestamp : null;
+}
+function resolvePolicyCooldownUntil(record) {
+    const result = asRecord(asRecord(record).result);
+    const timestamp = Date.parse(String(result.cooldown_until ?? ""));
+    return Number.isFinite(timestamp) ? timestamp : null;
+}
+async function readChatAutoReplyState(handledPath, peerOsId, nowMs) {
+    const records = await (0, box_state_1.readBoxArray)(handledPath);
+    let count = 0;
+    for (let index = records.length - 1; index >= 0; index -= 1) {
+        const record = records[index];
+        if (isChatLimitPolicyForPeer(record, peerOsId)) {
+            const cooldownUntil = resolvePolicyCooldownUntil(record);
+            if (cooldownUntil && cooldownUntil > nowMs) {
+                return {
+                    count: 0,
+                    cooldownActive: true,
+                    cooldownUntil,
+                    cooldownStartedAt: resolveRecordTime(record) ?? nowMs
+                };
+            }
+            return {
+                count: 0,
+                cooldownActive: false,
+                cooldownUntil,
+                cooldownStartedAt: resolveRecordTime(record) ?? null
+            };
+        }
+        if (!isHandledChatFromPeer(record, peerOsId)) {
+            break;
+        }
+        count += 1;
+    }
+    return {
+        count,
+        cooldownActive: false,
+        cooldownUntil: null,
+        cooldownStartedAt: null
+    };
 }
 function safeJsonParse(value, fallback) {
     if (!value) {
@@ -51,8 +121,7 @@ function normalizeHookConfig(profile) {
         delivery: process.env.LINZ_AGENT_EVENT_HOOK_DELIVERY ?? fromProfile.delivery,
         timeout_ms: process.env.LINZ_AGENT_EVENT_HOOK_TIMEOUT_MS
             ? Number(process.env.LINZ_AGENT_EVENT_HOOK_TIMEOUT_MS)
-            : fromProfile.timeout_ms,
-        inbox_path: process.env.LINZ_AGENT_EVENT_INBOX_PATH ?? fromProfile.inbox_path
+            : fromProfile.timeout_ms
     };
     if (config.enabled === false || !config.command) {
         return null;
@@ -65,35 +134,67 @@ function normalizeHookConfig(profile) {
         timeout_ms: Number(config.timeout_ms ?? 30_000)
     };
 }
-function resolveInboxPath(sessionPath, profileId, hookConfig) {
-    if (hookConfig?.inbox_path) {
-        return node_path_1.default.resolve(String(hookConfig.inbox_path));
+function resolveInboxOverride(profile) {
+    const fromProfile = asRecord(profile.agent_event_hook);
+    return process.env.LINZ_AGENT_EVENT_INBOX_PATH ?? fromProfile.inbox_path;
+}
+function resolveOsScopedPath(input, osId, label) {
+    const raw = String(input);
+    const usedOsPlaceholder = raw.includes("{{os_id}}");
+    const rendered = raw.replaceAll("{{os_id}}", osId);
+    const resolved = node_path_1.default.resolve(rendered);
+    if (!usedOsPlaceholder && !node_path_1.default.basename(node_path_1.default.dirname(resolved)).includes(osId)) {
+        throw new Error(`${label} 必须包含当前 os_id 或 {{os_id}} 占位符，避免多个元神共用同一个文件`);
     }
-    return node_path_1.default.join(node_path_1.default.dirname(sessionPath), "inbox", `${profileId}.jsonl`);
+    return resolved;
+}
+function resolveInboxPath(sessionPath, osId, profile) {
+    const override = resolveInboxOverride(profile);
+    if (override) {
+        return resolveOsScopedPath(String(override), osId, "自定义 inbox_path");
+    }
+    return (0, path_resolver_1.getInboxPathForSession)(sessionPath, osId);
+}
+function resolveEnvelopeProfileId(profile, session) {
+    const profileId = (0, path_resolver_1.resolveProfileId)(String(profile.profile_id ?? session.profile_id ?? "local-default"));
+    const sessionProfileId = session.profile_id ? (0, path_resolver_1.resolveProfileId)(String(session.profile_id)) : profileId;
+    if (profileId !== sessionProfileId) {
+        throw new Error(`profile 与 session 不匹配，profile_id=${profileId}，session.profile_id=${sessionProfileId}`);
+    }
+    return profileId;
+}
+function resolveEnvelopeOsId(profile) {
+    const osId = String(profile.os_id ?? "").trim();
+    if (!osId) {
+        throw new Error("本地 profile 缺少 os_id，无法写入元神隔离的 box");
+    }
+    return (0, path_resolver_1.resolveOsIdPathSegment)(osId);
 }
 function buildAgentEventEnvelope({ subject, payload, profile, session }) {
+    const profileId = resolveEnvelopeProfileId(profile, session);
+    const osId = resolveEnvelopeOsId(profile);
     return {
         schema_version: "linz.agent_event.v1",
         received_at: new Date().toISOString(),
         subject,
         event_id: resolveEventId(payload),
         event_type: resolveEventType(payload),
-        profile_id: String(profile.profile_id ?? session.profile_id ?? "local-default"),
-        os_id: String(profile.os_id ?? ""),
+        profile_id: profileId,
+        os_id: osId,
         soul_id: String(profile.soul_id ?? ""),
         payload
     };
 }
 function shouldDispatchAgentEvent(envelope) {
-    if (envelope.event_type === "sys.heartbeat.report" &&
-        asRecord(envelope.payload?.payload).os_id === envelope.os_id) {
+    if (envelope.subject === "sys.heartbeat" || envelope.event_type === "sys.heartbeat.report") {
         return false;
     }
     return true;
 }
 async function appendAgentInboxEvent(inboxPath, envelope) {
-    await (0, promises_1.mkdir)(node_path_1.default.dirname(inboxPath), { recursive: true });
-    await (0, promises_1.appendFile)(inboxPath, `${JSON.stringify(envelope)}\n`, "utf8");
+    const record = (0, box_state_1.buildUnreadBoxRecord)(envelope);
+    await (0, box_state_1.appendBoxRecord)(inboxPath, record);
+    return record;
 }
 function buildHookEnv(envelope, inboxPath, hookConfig) {
     return {
@@ -118,7 +219,7 @@ async function runHookProcess(hookConfig, envelope, inboxPath) {
     if (delivery === "env-json") {
         env.LINZ_EVENT_JSON = eventJson;
     }
-    await new Promise((resolve, reject) => {
+    const result = await new Promise((resolve, reject) => {
         const child = (0, node_child_process_1.spawn)(String(hookConfig.command), args, {
             cwd: hookConfig.cwd,
             env,
@@ -153,7 +254,7 @@ async function runHookProcess(hookConfig, envelope, inboxPath) {
             }
             settled = true;
             if (code === 0) {
-                resolve();
+                resolve({ exitCode: code, stderr });
                 return;
             }
             reject(new Error(`Agent 事件 hook 执行失败，退出码: ${code}${stderr ? `，错误: ${stderr}` : ""}`));
@@ -165,65 +266,241 @@ async function runHookProcess(hookConfig, envelope, inboxPath) {
             child.stdin?.end();
         }
     });
+    return {
+        schema_version: "linz.agent_hook_result.v1",
+        handled_at: new Date().toISOString(),
+        delivery,
+        event_id: envelope.event_id,
+        event_type: envelope.event_type,
+        subject: envelope.subject,
+        exit_code: result.exitCode,
+        stderr: result.stderr
+    };
+}
+function buildEnvelopeFromUnreadRecord({ unreadRecord, profile, session }) {
+    const payload = unreadRecord.event ?? {};
+    return {
+        schema_version: "linz.agent_event.v1",
+        received_at: new Date().toISOString(),
+        subject: String(unreadRecord.subject ?? ""),
+        event_id: resolveEventId(payload),
+        event_type: resolveEventType(payload),
+        profile_id: resolveEnvelopeProfileId(profile, session),
+        os_id: resolveEnvelopeOsId(profile),
+        soul_id: String(profile.soul_id ?? ""),
+        payload
+    };
+}
+async function suppressChatAutoReplyIfNeeded({ unreadPath, submitedPath, handledPath, unreadRecord, envelope, logger, source }) {
+    if (!isChatMessageEvent(envelope.payload)) {
+        return { suppressed: false };
+    }
+    const peerOsId = resolveChatSenderOsId(envelope.payload);
+    if (!peerOsId) {
+        return { suppressed: false };
+    }
+    const config = (0, connection_config_1.getDefaultConnectionConfig)();
+    const limit = config.chat_auto_reply_limit;
+    const nowMs = Date.now();
+    const state = await readChatAutoReplyState(handledPath, peerOsId, nowMs);
+    if (!state.cooldownActive && state.count < limit) {
+        return { suppressed: false };
+    }
+    const cooldownStartedAt = state.cooldownStartedAt ?? nowMs;
+    const cooldownUntil = state.cooldownUntil ?? (cooldownStartedAt + config.chat_round_cooldown_ms);
+    const claimedRecord = await (0, box_state_1.moveUnreadBoxRecordToSubmited)(unreadPath, submitedPath, String(unreadRecord.index ?? ""), "policy");
+    if (!claimedRecord) {
+        return { suppressed: true, handled: false, invoked: false };
+    }
+    await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
+    await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
+        handler_type: "policy",
+        source,
+        result: {
+            schema_version: "linz.agent_runtime_policy_result.v1",
+            suppressed: "chat_auto_reply_limit",
+            peer_os_id: peerOsId,
+            limit,
+            prior_handled_count: state.count,
+            cooldown_ms: config.chat_round_cooldown_ms,
+            cooldown_started_at: new Date(cooldownStartedAt).toISOString(),
+            cooldown_until: new Date(cooldownUntil).toISOString(),
+            event_id: envelope.event_id,
+            event_type: envelope.event_type,
+            subject: envelope.subject
+        }
+    }));
+    await logger?.info("agent_chat_auto_reply_suppressed", {
+        source,
+        subject: envelope.subject,
+        eventType: envelope.event_type,
+        eventId: envelope.event_id,
+        peerOsId,
+        limit,
+        priorHandledCount: state.count,
+        cooldownUntil: new Date(cooldownUntil).toISOString()
+    });
+    return { suppressed: true, handled: true, invoked: false };
+}
+async function processUnreadAgentRecord({ unreadPath, submitedPath, handledPath, unreadRecord, profile, session, logger, source }) {
+    const hookConfig = normalizeHookConfig(profile);
+    if (!hookConfig) {
+        try {
+            if (!(0, runtime_adapter_1.hasRuntimeAgentEventHandler)(profile)) {
+                return { handled: false, invoked: false };
+            }
+        }
+        catch (error) {
+            await logger?.error("agent_runtime_unavailable", error, {
+                source,
+                subject: unreadRecord.subject,
+                eventId: unreadRecord.index
+            });
+            return { handled: false, invoked: false };
+        }
+    }
+    const pendingEnvelope = buildEnvelopeFromUnreadRecord({ unreadRecord, profile, session });
+    const suppression = await suppressChatAutoReplyIfNeeded({
+        unreadPath,
+        submitedPath,
+        handledPath,
+        unreadRecord,
+        envelope: pendingEnvelope,
+        logger,
+        source
+    });
+    if (suppression.suppressed) {
+        return suppression;
+    }
+    const claimedRecord = await (0, box_state_1.moveUnreadBoxRecordToSubmited)(unreadPath, submitedPath, String(unreadRecord.index ?? ""), hookConfig ? "hook" : "runtime");
+    if (!claimedRecord) {
+        return { handled: false, invoked: false };
+    }
+    const envelope = buildEnvelopeFromUnreadRecord({ unreadRecord: claimedRecord, profile, session });
+    try {
+        if (hookConfig) {
+            const hookResult = await runHookProcess(hookConfig, envelope, unreadPath);
+            await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
+            await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
+                handler_type: "hook",
+                source,
+                result: hookResult
+            }));
+            await logger?.info("agent_event_hook_succeeded", {
+                source,
+                subject: envelope.subject,
+                eventType: envelope.event_type,
+                eventId: envelope.event_id,
+                delivery: hookConfig.delivery
+            });
+            return { handled: true, invoked: true };
+        }
+        const runtimeResult = await (0, runtime_adapter_1.dispatchRuntimeAgentEvent)({ envelope, profile, session });
+        if (!runtimeResult.runtimeInvoked) {
+            await (0, box_state_1.restoreSubmitedBoxRecordToUnread)(submitedPath, unreadPath, claimedRecord);
+            return { handled: false, invoked: false };
+        }
+        await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
+        await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
+            handler_type: "runtime",
+            source,
+            result: runtimeResult.result
+        }));
+        await logger?.info("agent_runtime_succeeded", {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id
+        });
+        return { handled: true, invoked: true };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await (0, box_state_1.markSubmitedBoxRecordFailed)(submitedPath, String(claimedRecord.index ?? ""), message);
+        await logger?.error(hookConfig ? "agent_event_hook_failed" : "agent_runtime_failed", error, {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id
+        });
+        return { handled: false, invoked: true };
+    }
+}
+async function replayUnreadAgentEvents({ profile, session, sessionPath, logger }) {
+    const osId = resolveEnvelopeOsId(profile);
+    const inboxPath = resolveInboxPath(sessionPath, osId, profile);
+    const submitedPath = (0, path_resolver_1.getSubmitedPathForSession)(sessionPath, osId);
+    const handledPath = (0, path_resolver_1.getHandledPathForSession)(sessionPath, osId);
+    const unreadRecords = await (0, box_state_1.readBoxArray)(inboxPath);
+    let attempted = 0;
+    let handled = 0;
+    for (const unreadRecord of unreadRecords) {
+        if (String(unreadRecord?.status ?? "unread") !== "unread") {
+            continue;
+        }
+        attempted += 1;
+        const result = await processUnreadAgentRecord({
+            unreadPath: inboxPath,
+            submitedPath,
+            handledPath,
+            unreadRecord,
+            profile,
+            session,
+            logger,
+            source: "replay"
+        });
+        if (result.handled) {
+            handled += 1;
+        }
+    }
+    if (handled > 0) {
+        await logger?.info("agent_unread_replay_completed", {
+            inboxPath,
+            attempted,
+            handled
+        });
+    }
+    return {
+        inboxPath,
+        attempted,
+        handled
+    };
 }
 async function handleAgentEvent({ subject, payload, profile, session, sessionPath, logger }) {
     const hookConfig = normalizeHookConfig(profile);
-    const profileId = String(profile.profile_id ?? session.profile_id ?? "local-default");
-    const inboxPath = resolveInboxPath(sessionPath, profileId, hookConfig);
     const envelope = buildAgentEventEnvelope({ subject, payload, profile, session });
+    const inboxPath = resolveInboxPath(sessionPath, envelope.os_id, profile);
+    const submitedPath = (0, path_resolver_1.getSubmitedPathForSession)(sessionPath, envelope.os_id);
+    const handledPath = (0, path_resolver_1.getHandledPathForSession)(sessionPath, envelope.os_id);
     if (!shouldDispatchAgentEvent(envelope)) {
         await logger?.info("agent_event_skipped", {
             subject,
             eventType: envelope.event_type,
-            reason: "self_heartbeat"
+            reason: "heartbeat"
         });
         return { inboxPath, hookInvoked: false, skipped: true };
     }
-    await appendAgentInboxEvent(inboxPath, envelope);
+    const unreadRecord = await appendAgentInboxEvent(inboxPath, envelope);
     await logger?.info("agent_event_inbox_appended", {
         inboxPath,
         subject,
         eventType: envelope.event_type,
         eventId: envelope.event_id
     });
-    if (!hookConfig) {
-        try {
-            const runtimeResult = await (0, runtime_adapter_1.dispatchRuntimeAgentEvent)({ envelope, profile, sessionPath });
-            if (runtimeResult.runtimeInvoked) {
-                await logger?.info("agent_runtime_succeeded", {
-                    subject,
-                    eventType: envelope.event_type,
-                    eventId: envelope.event_id,
-                    outboxPath: runtimeResult.outboxPath
-                });
-            }
-            return { inboxPath, hookInvoked: false, runtimeInvoked: runtimeResult.runtimeInvoked, skipped: false };
-        }
-        catch (error) {
-            await logger?.error("agent_runtime_failed", error, {
-                subject,
-                eventType: envelope.event_type,
-                eventId: envelope.event_id
-            });
-            return { inboxPath, hookInvoked: false, runtimeInvoked: false, skipped: false };
-        }
-    }
-    try {
-        await runHookProcess(hookConfig, envelope, inboxPath);
-        await logger?.info("agent_event_hook_succeeded", {
-            subject,
-            eventType: envelope.event_type,
-            eventId: envelope.event_id,
-            delivery: hookConfig.delivery
-        });
-        return { inboxPath, hookInvoked: true, runtimeInvoked: false, skipped: false };
-    }
-    catch (error) {
-        await logger?.error("agent_event_hook_failed", error, {
-            subject,
-            eventType: envelope.event_type,
-            eventId: envelope.event_id
-        });
-        return { inboxPath, hookInvoked: false, runtimeInvoked: false, skipped: false };
-    }
+    const result = await processUnreadAgentRecord({
+        unreadPath: inboxPath,
+        submitedPath,
+        handledPath,
+        unreadRecord,
+        profile,
+        session,
+        logger,
+        source: "incoming"
+    });
+    return {
+        inboxPath,
+        hookInvoked: Boolean(hookConfig && result.invoked),
+        runtimeInvoked: Boolean(!hookConfig && result.invoked),
+        skipped: false
+    };
 }

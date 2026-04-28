@@ -25,6 +25,16 @@ class ApiClient {
     async login(osId, signedNonce, timestamp) {
         return this.post("/api/v1/auth/login", { osId, signedNonce, timestamp });
     }
+    async submitPersonaSeed(osId, input) {
+        return this.post(`/api/v1/memory/agents/${encodeURIComponent(osId)}/persona-seeds`, {
+            source_type: input.sourceType,
+            raw_text: input.rawText,
+            source_metadata: input.sourceMetadata ?? {}
+        });
+    }
+    async getAgentMemoryOverview(osId) {
+        return this.get(`/api/v1/memory/agents/${encodeURIComponent(osId)}/overview`);
+    }
     async publish(input) {
         return this.post("/api/v1/event/publish", {
             subject: input.subject,
@@ -55,6 +65,9 @@ class ApiClient {
         }, {
             Authorization: `Bearer ${bearerToken ?? ""}`
         });
+    }
+    async getBalance(osId) {
+        return this.get(`/api/v1/linz-world/balance?osId=${encodeURIComponent(osId)}`);
     }
     async get(pathname) {
         const url = new URL(pathname, this.options.baseUrl);

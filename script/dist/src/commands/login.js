@@ -17,6 +17,9 @@ function buildTargetInbox(os_id) {
 function uniq(values) {
     return [...new Set((values ?? []).map(String).filter(Boolean))];
 }
+function asRecord(value) {
+    return value && typeof value === "object" ? value : {};
+}
 function spawnListenerProcess(profilePath, sessionPath) {
     const cliEntryPath = node_path_1.default.resolve(__dirname, "../cli.js");
     const child = (0, node_child_process_1.spawn)(process.execPath, [cliEntryPath, "__listen", "--profile-path", profilePath, "--session-path", sessionPath], {
@@ -28,11 +31,26 @@ function spawnListenerProcess(profilePath, sessionPath) {
 }
 async function loginCommand(profilePath, sessionPath, input, options = {}) {
     return (0, listener_process_1.withListenerLoginLock)(sessionPath, async () => {
+        const originalProfilePath = profilePath;
         const profileStore = new profile_store_1.FileProfileStore(profilePath);
         const profile = await profileStore.load();
         const os_id = input.os_id ?? profile.os_id;
+        const runtime = input.runtime ? String(input.runtime).trim().toLowerCase() : "";
         if (!os_id || !profile.soul_id) {
             throw new Error("请先完成 registry 再执行 login");
+        }
+        if (profile.credential_state === "logged_in") {
+            throw new Error("当前身份已登录，请选择其他 profile 登录或者请先执行 linz logout 后再执行 login");
+        }
+        if (profile.runtime_setup_state !== "configured") {
+            throw new Error("请先执行 linz runtime configure 后再执行 login；建议先运行 linz runtime detect 查看候选");
+        }
+        if (runtime) {
+            const agents = asRecord(profile.agents);
+            if (!agents[runtime]) {
+                throw new Error(`本地 runtime 未配置: ${runtime}，请先执行 linz runtime configure --type ${runtime}`);
+            }
+            profile.defaultAgent = runtime;
         }
         const keyMaterial = await (0, key_material_1.ensureLocalKeyMaterial)(profile);
         const timestamp = Date.now();
@@ -44,8 +62,9 @@ async function loginCommand(profilePath, sessionPath, input, options = {}) {
         const sessionStore = new session_state_1.FileSessionStateStore(sessionPath);
         const session = await sessionStore.load(String(profile.profile_id));
         const targetInbox = buildTargetInbox(os_id);
-        await (0, listener_process_1.stopListenerProcesses)(profilePath, sessionPath, session.listenerPid, options.processTools);
-        session.loggedInAt = new Date().toISOString();
+        await (0, listener_process_1.stopListenerProcesses)(originalProfilePath, sessionPath, session.listenerPid, options.processTools);
+        const loggedInAt = new Date().toISOString();
+        session.loggedInAt = loggedInAt;
         session.token = String(response.data.token ?? "");
         session.tokenExpiresAt = new Date(Date.now() + Number(response.data.expires_in ?? 0) * 1000).toISOString();
         session.credentialId = "";
@@ -65,7 +84,11 @@ async function loginCommand(profilePath, sessionPath, input, options = {}) {
         profile.public_key_fingerprint = keyMaterial.fingerprint;
         profile.credential_state = "logged_in";
         profile.authorization_state = "valid";
-        await profileStore.save(profile);
+        profile.last_login_at = loggedInAt;
+        profilePath = await (0, profile_store_1.saveProfileUsingOsIdFileName)(profileStore, profile);
+        if (profilePath !== originalProfilePath) {
+            await (0, listener_process_1.stopListenerProcesses)(profilePath, sessionPath, session.listenerPid, options.processTools);
+        }
         if (options.autoStartListener !== false) {
             const listenerPid = options.spawnListener?.(profilePath, sessionPath) ?? spawnListenerProcess(profilePath, sessionPath);
             session.listenerPid = listenerPid;

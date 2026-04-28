@@ -7,6 +7,7 @@ exports.isSameListenerProcess = isSameListenerProcess;
 exports.listListenerCandidateProcesses = listListenerCandidateProcesses;
 exports.stopProcess = stopProcess;
 exports.stopListenerProcesses = stopListenerProcesses;
+exports.stopAllListenerProcesses = stopAllListenerProcesses;
 exports.withListenerLoginLock = withListenerLoginLock;
 const node_child_process_1 = require("node:child_process");
 const promises_1 = require("node:fs/promises");
@@ -128,6 +129,20 @@ async function stopListenerProcesses(profilePath, sessionPath, recordedPid, tool
         await (tools.stopProcess ?? ((targetPid) => stopProcess(targetPid, tools.stopWaitMs)))(pid);
     }
     return [...pids];
+}
+async function stopAllListenerProcesses(tools = {}) {
+    let candidates = [];
+    try {
+        candidates = await (tools.listProcesses ?? listListenerCandidateProcesses)();
+    }
+    catch {
+        return [];
+    }
+    const pids = [...new Set(candidates.map((candidate) => candidate.pid).filter((pid) => pid > 0))];
+    for (const pid of pids) {
+        await (tools.stopProcess ?? ((targetPid) => stopProcess(targetPid, tools.stopWaitMs)))(pid);
+    }
+    return pids;
 }
 async function withListenerLoginLock(sessionPath, action, options = {}) {
     const timeoutMs = options.timeoutMs ?? 10_000;
