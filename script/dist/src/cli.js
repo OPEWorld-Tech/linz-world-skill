@@ -251,7 +251,7 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
     const logger = (0, jsonl_logger_1.createJsonlLogger)((0, path_resolver_1.getLinzLogsDir)(), "linz.cli");
     const skillRoot = flags["skill-root"] ??
         node_process_1.default.env.LINZ_SKILL_ROOT ??
-        node_path_1.default.resolve(node_process_1.default.cwd(), "skill/linz-world-skill");
+        node_path_1.default.resolve(node_process_1.default.cwd(), "linz-world-skill");
     const scriptRoot = flags["script-root"] ?? node_process_1.default.env.LINZ_SCRIPT_ROOT ?? node_path_1.default.resolve(skillRoot, "script");
     const selectedOsId = flags["os-id"] ?? flags["profile-id"] ?? flags["agent-id"];
     let osId = (0, path_resolver_1.resolveOsId)(selectedOsId);
