@@ -25,6 +25,10 @@ function resolveEventId(payload) {
     const record = asRecord(payload);
     return String(record.event_id ?? record.eventId ?? "");
 }
+function resolveEventTimestamp(payload) {
+    const record = asRecord(payload);
+    return String(record.timestamp ?? "");
+}
 function resolveNestedPayload(event) {
     return asRecord(asRecord(event).payload);
 }
@@ -179,6 +183,7 @@ function buildAgentEventEnvelope({ subject, payload, profile, session }) {
         subject,
         event_id: resolveEventId(payload),
         event_type: resolveEventType(payload),
+        timestamp: resolveEventTimestamp(payload),
         profile_id: profileId,
         os_id: osId,
         soul_id: String(profile.soul_id ?? ""),

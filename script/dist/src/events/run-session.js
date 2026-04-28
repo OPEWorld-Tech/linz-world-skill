@@ -97,15 +97,12 @@ async function runSession(options) {
     try {
         while (!isStopped() || !hasPublishedHeartbeat) {
             try {
-                const emittedAt = new Date().toISOString();
+                const timestamp = new Date().toISOString();
                 await client.publish(heartbeatSubject, {
                     event_type: "sys.heartbeat.report",
                     event_id: (0, node_crypto_1.randomUUID)(),
-                    payload: {
-                        ...options.heartbeatPayload,
-                        emitted_at: emittedAt,
-                        emittedAt
-                    }
+                    timestamp,
+                    payload: options.heartbeatPayload
                 });
                 hasPublishedHeartbeat = true;
                 await options.onHeartbeat?.();
