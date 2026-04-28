@@ -9,6 +9,7 @@ const node_child_process_1 = require("node:child_process");
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const api_client_1 = require("../clients/api-client");
+const connection_config_1 = require("../config/connection-config");
 const runtime_adapters_1 = require("../config/runtime-adapters");
 function asRecord(value) {
     return value && typeof value === "object" ? value : {};
@@ -63,7 +64,7 @@ function normalizeRuntimeConfig(profile) {
         };
     }
     const adapter = (0, runtime_adapters_1.getRuntimeAdapter)(runtimeType);
-    if (adapter) {
+    if (adapter && (0, connection_config_1.hasComputeProviderAPIKeyConfigured)()) {
         throw new Error(`${runtimeType} runtime 的旧式 CLI 直连配置已停用，请重新执行 linz runtime configure --type ${runtimeType} --model <MODEL>`);
     }
     if (!adapter && runtimeType !== "custom") {

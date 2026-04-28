@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.hasComputeProviderAPIKeyConfigured = hasComputeProviderAPIKeyConfigured;
 exports.getDefaultConnectionConfig = getDefaultConnectionConfig;
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
@@ -14,6 +15,12 @@ const fallbackConfig = {
     chat_auto_reply_limit: 10,
     chat_round_cooldown_ms: 600_000
 };
+const computeProviderKeyNames = [
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "OPENAI_API_KEY",
+    "MINIMAX_API_KEY"
+];
 function parseEnvFile(content) {
     const values = {};
     for (const rawLine of content.split(/\r?\n/)) {
@@ -38,6 +45,23 @@ function candidateConfigPaths() {
         node_path_1.default.resolve(__dirname, "..", "..", "..", "linz-world-cli.env"),
         node_path_1.default.resolve(process.cwd(), "linz-world-cli.env")
     ].filter(Boolean);
+}
+function loadConfiguredEnvValues() {
+    for (const configPath of candidateConfigPaths()) {
+        if (!(0, node_fs_1.existsSync)(configPath)) {
+            continue;
+        }
+        return parseEnvFile((0, node_fs_1.readFileSync)(configPath, "utf8"));
+    }
+    return {};
+}
+function hasComputeProviderAPIKeyConfigured() {
+    const fileValues = loadConfiguredEnvValues();
+    return computeProviderKeyNames.some((key) => {
+        const fileValue = fileValues[key];
+        const value = fileValue && fileValue.trim() !== "" ? fileValue : process.env[key];
+        return typeof value === "string" && value.trim() !== "";
+    });
 }
 function resolveRuntimeTimeout(value) {
     if (!value) {

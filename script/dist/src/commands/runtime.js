@@ -66,19 +66,29 @@ function buildComputeRuntimeConfig(type, flags) {
     };
 }
 function buildCommandRuntimeConfig(type, flags) {
+    const adapter = (0, runtime_adapters_1.getRuntimeAdapter)(type);
     const isCustom = (0, runtime_adapters_1.normalizeRuntimeType)(type) === "custom";
-    if (!isCustom) {
+    if (!adapter && !isCustom) {
         throw new Error(`未知 runtime 类型: ${type}`);
     }
     const rawCommand = flags.exec ?? flags.command;
     const sourceTokens = rawCommand
         ? parseCommandLine(rawCommand)
-        : [];
+        : [...(adapter?.trigger ?? [])];
     if (sourceTokens.length === 0) {
         throw new Error("runtime command 不能为空");
     }
     const command = sourceTokens[0];
-    const args = sourceTokens.slice(1);
+    let args = sourceTokens.slice(1);
+    if (adapter && command !== adapter.trigger?.[0]) {
+        throw new Error(`${type} runtime 只能配置白名单命令: ${adapter.trigger?.[0]}`);
+    }
+    if (adapter && args.length === 0) {
+        args = adapter.trigger.slice(1);
+    }
+    if ((0, runtime_adapters_1.normalizeRuntimeType)(type) === "codex" && args[0] === "exec" && !args.includes("--skip-git-repo-check")) {
+        args = ["exec", "--skip-git-repo-check", ...args.slice(1)];
+    }
     const finalArgs = hasPromptTemplate(args) ? args : [...args, runtime_adapters_1.DEFAULT_EVENT_PROMPT];
     return {
         kind: "command",
@@ -117,7 +127,7 @@ async function runtimeCommand(profilePath, subcommand, flags, options = {}) {
     }
     const runtimeConfig = flags.url && !flags.command && !flags.exec
         ? buildHttpRuntimeConfig(flags)
-        : (0, runtime_adapters_1.isKnownRuntimeType)(runtimeType)
+        : (0, runtime_adapters_1.isKnownRuntimeType)(runtimeType) && (0, connection_config_1.hasComputeProviderAPIKeyConfigured)()
             ? buildComputeRuntimeConfig(runtimeType, flags)
             : buildCommandRuntimeConfig(runtimeType, flags);
     const agents = asRecord(profile.agents);
