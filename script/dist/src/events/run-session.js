@@ -4,6 +4,7 @@ exports.runSession = runSession;
 const promises_1 = require("node:timers/promises");
 const node_crypto_1 = require("node:crypto");
 const nats_client_1 = require("../clients/nats-client");
+const connection_config_1 = require("../config/connection-config");
 function normalizeSubjects(subjects) {
     return [...new Set((subjects ?? []).map(String).filter(Boolean))];
 }
@@ -15,7 +16,7 @@ function resolveEventType(payload) {
 }
 async function runSession(options) {
     const client = options.client ?? new nats_client_1.NatsClient(options.nats_url);
-    const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 60_000;
+    const heartbeatIntervalMs = options.heartbeatIntervalMs ?? (0, connection_config_1.getDefaultConnectionConfig)().heartbeat_interval_ms;
     const reconnectDelayMs = options.reconnectDelayMs ?? 500;
     const heartbeatSubject = options.heartbeatSubject ?? "sys.heartbeat";
     const refreshEventType = options.refreshEventType ?? "wsp.sys.subject.changed";

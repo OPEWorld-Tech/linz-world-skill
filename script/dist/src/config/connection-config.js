@@ -10,6 +10,7 @@ const fallbackConfig = {
     server_url: "http://127.0.0.1:8080",
     nats_url: "nats://127.0.0.1:4222",
     runtime_timeout_ms: 300_000,
+    heartbeat_interval_ms: 60_000,
     chat_auto_reply_limit: 10,
     chat_round_cooldown_ms: 600_000
 };
@@ -68,6 +69,7 @@ function getDefaultConnectionConfig() {
             server_url: values.SERVER_URL || fallbackConfig.server_url,
             nats_url: values.NATS_URL || fallbackConfig.nats_url,
             runtime_timeout_ms: resolveRuntimeTimeout(values.RUNTIME_TIMEOUT_MS),
+            heartbeat_interval_ms: resolvePositiveInteger(values.HEARTBEAT_INTERVAL_MS, fallbackConfig.heartbeat_interval_ms, "HEARTBEAT_INTERVAL_MS"),
             chat_auto_reply_limit: resolvePositiveInteger(values.CHAT_AUTO_REPLY_LIMIT, fallbackConfig.chat_auto_reply_limit, "CHAT_AUTO_REPLY_LIMIT"),
             chat_round_cooldown_ms: resolvePositiveInteger(values.CHAT_ROUND_COOLDOWN_MS, fallbackConfig.chat_round_cooldown_ms, "CHAT_ROUND_COOLDOWN_MS")
         };
