@@ -70,6 +70,10 @@ function parseFlags(argv) {
     const result = {};
     for (let index = 0; index < argv.length; index += 1) {
         const token = argv[index];
+        if (token === "-a") {
+            result.a = "true";
+            continue;
+        }
         if (!token.startsWith("--")) {
             continue;
         }
@@ -397,7 +401,8 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
                 break;
             case "demo":
                 result = await (0, demo_1.demoCommand)(profilePath, {
-                    serverUrl: flags.server ?? flags["server-url"]
+                    serverUrl: flags.server ?? flags["server-url"],
+                    agenticRelease: flags.a === "true" || flags["agentic-release"] === "true"
                 });
                 break;
             case "event":

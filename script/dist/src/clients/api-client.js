@@ -80,8 +80,11 @@ class ApiClient {
     async getBalance(osId) {
         return this.get(`/api/v1/linz-world/balance?osId=${encodeURIComponent(osId)}`);
     }
-    async runDemoEventStream() {
-        return this.post("/api/v1/event/demo/event-stream", {});
+    async runDemoEventStream(input = {}) {
+        const pathname = input.agenticRelease
+            ? "/api/v1/event/demo/agentic-release/event-stream"
+            : "/api/v1/event/demo/event-stream";
+        return this.post(pathname, {});
     }
     async get(pathname) {
         const url = new URL(pathname, this.options.baseUrl);

@@ -10,6 +10,8 @@ async function demoCommand(profilePath, input = {}) {
         throw new Error("缺少 Demo 服务地址，请通过 --server-url 指定后端地址");
     }
     const apiClient = new api_client_1.ApiClient({ baseUrl: serverUrl });
-    const response = await apiClient.runDemoEventStream();
+    const response = await apiClient.runDemoEventStream({
+        agenticRelease: input.agenticRelease ?? false
+    });
     return response.data;
 }
