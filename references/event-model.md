@@ -208,6 +208,12 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 
 `mrk.order.accepted`
 
+接单可直接使用快捷命令，CLI 会把当前登录 agent 填入 `worker_os_id` 与 `worker_os_name`：
+
+```bash
+linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os-name "阿尔法" --order-id ORD1
+```
+
 ```json
 {
   "event_type": "mrk.order.accepted",

@@ -32,7 +32,11 @@ exports.EVENT_CATALOG = [
             "wsp.mrk.order.handover.approved",
             "wsp.mrk.order.handover.rejected",
             "wsp.mrk.settlement.completed",
-            "wsp.mrk.settlement.failed"
+            "wsp.mrk.settlement.failed",
+            "wsp.oso.consultation.report.generated",
+            "wsp.oso.recommendation.generated",
+            "wsp.oso.warning.raised",
+            "wsp.oso.intervention.suggested"
         ]
     },
     {
@@ -75,6 +79,13 @@ exports.EVENT_CATALOG = [
     },
     { subject: "ec.transfer", eventTypes: ["ec.transfer.requested", "ec.transfer.completed", "ec.transfer.failed"] },
     { subject: "event.memory.sink", eventTypes: ["event.memory.sink.requested"] },
+    {
+        subject: "oso.consultation",
+        eventTypes: ["oso.consultation.requested", "oso.consultation.report.generated"]
+    },
+    { subject: "oso.recommendation", eventTypes: ["oso.recommendation.generated"] },
+    { subject: "oso.warning", eventTypes: ["oso.warning.raised"] },
+    { subject: "oso.intervention", eventTypes: ["oso.intervention.suggested"] },
     { subject: "apl.case", eventTypes: ["apl.case.created", "apl.case.accepted", "apl.case.withdrawn"] },
     { subject: "apl.review", eventTypes: ["apl.review.started", "apl.review.completed", "apl.review.reopened"] },
     {
@@ -102,6 +113,7 @@ exports.EVENT_CATALOG = [
 exports.BLOCKED_EVENT_VALUES = [
     { value: "sys.boardcast", scope: "subject", replacement: "sys.broadcast" },
     { value: "wsp.{os_id}.sys", scope: "subject", replacement: "wsp.{os_id}" },
+    { value: "wsp.{os_id}.oso", scope: "subject", replacement: "wsp.{os_id}" },
     { value: "sys.login.request", scope: "event_type", replacement: "auth.login.request" },
     { value: "sys.login.result", scope: "event_type", replacement: "wsp.sys.login.response" },
     { value: "subject_change", scope: "event_type", replacement: "wsp.sys.subject.changed" }
@@ -112,9 +124,11 @@ exports.CATALOG_USAGE_NOTES = [
     "已登录用户元神可通过 wsp.mrk.requirement.published 接收需求发布定向通知",
     "需求发布方不接收自己发布需求对应的 mrk.requirement.published 或 wsp.mrk.requirement.published",
     "mrk.order.handover.submitted 只是待校验的交付提交输入，不直接等同于可确认交付",
-    "wsp.mrk.order.handover.delivered 只能携带最小通知投影字段，且缺失通知只能由需求市场领域服务补发"
+    "wsp.mrk.order.handover.delivered 只能携带最小通知投影字段，且缺失通知只能由需求市场领域服务补发",
+    "oso.recommendation.generated、oso.warning.raised、oso.intervention.suggested 是 OSO 服务侧权威事实，不应由普通客户端伪造",
+    "wsp.oso.* 只能作为 wsp.{os_id} 下的收件箱通知投影，必须携带 source_event_id 追溯 OSO 权威事实"
 ];
-const RESERVED_WSP_INBOX_NAMES = new Set(["chat", "task", "sys", "mrk", "rent", "poca", "apl", "ec"]);
+const RESERVED_WSP_INBOX_NAMES = new Set(["chat", "task", "sys", "mrk", "rent", "poca", "apl", "ec", "oso"]);
 function matchesCatalogSubject(subjectPattern, subject) {
     if (subjectPattern === subject) {
         return true;
@@ -133,7 +147,7 @@ function isAllowedSubjectEvent(subject, eventType) {
 function isBlockedSubject(subject) {
     const reservedWspInbox = /^wsp\.([^.]+)$/.exec(subject);
     return (subject === "sys.boardcast" ||
-        /^wsp\.[^.]+\.sys$/.test(subject) ||
+        /^wsp\.[^.]+\.(sys|oso)$/.test(subject) ||
         Boolean(reservedWspInbox && RESERVED_WSP_INBOX_NAMES.has(reservedWspInbox[1])));
 }
 function isBlockedEventType(eventType) {
@@ -166,6 +180,17 @@ function ensureAllowedFields(payload, fields) {
         }
     }
 }
+function ensureNonEmptyArrayField(payload, field) {
+    const value = payload[field];
+    if (!Array.isArray(value) || value.length === 0) {
+        throw new Error(`payload 字段 "${field}" 必须为非空数组`);
+    }
+    for (const item of value) {
+        if (!readString(item)) {
+            throw new Error(`payload 字段 "${field}" 不能包含空值`);
+        }
+    }
+}
 function validateCatalogPublishInput(input) {
     if (isBlockedSubject(input.subject)) {
         throw new Error(`事件主题 ${input.subject} 已被禁止，请改用正式主题`);
@@ -178,7 +203,7 @@ function validateCatalogPublishInput(input) {
     }
     if (input.eventType === "wsp.chat.message.sent") {
         const payload = input.payload ?? {};
-        ensureRequiredFields(payload, ["to"]);
+        ensureRequiredFields(payload, ["message_id", "from", "to", "content"]);
         const expectedSubject = `wsp.${readString(payload.to)}`;
         if (input.subject !== expectedSubject) {
             throw new Error(`聊天消息必须发布到接收方收件箱 ${expectedSubject}`);
@@ -187,9 +212,7 @@ function validateCatalogPublishInput(input) {
     if (input.eventType === "wsp.mrk.requirement.published") {
         const payload = input.payload ?? {};
         ensureRequiredFields(payload, ["recipient_os_id", "publisher_os_id"]);
-        const recipientOsId = readString(payload.recipient_os_id);
-        const publisherOsId = readString(payload.publisher_os_id);
-        if (recipientOsId === publisherOsId) {
+        if (readString(payload.recipient_os_id) === readString(payload.publisher_os_id)) {
             throw new Error("需求发布方不接收自己发布的需求消息");
         }
     }
@@ -200,13 +223,7 @@ function validateCatalogPublishInput(input) {
     }
     if (input.eventType === "mrk.settlement.requested") {
         const payload = input.payload ?? {};
-        ensureRequiredFields(payload, [
-            "settlement_id",
-            "requirement_id",
-            "order_id",
-            "amount",
-            "business_transaction_id"
-        ]);
+        ensureRequiredFields(payload, ["settlement_id", "requirement_id", "amount"]);
     }
     if (input.eventType === "wsp.mrk.order.handover.delivered") {
         const payload = input.payload ?? {};
@@ -228,5 +245,53 @@ function validateCatalogPublishInput(input) {
             "deliverer_os_name",
             "handover_version"
         ]);
+    }
+    if (input.eventType === "oso.consultation.requested") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, ["requirement_id", "publisher_os_id", "recipient_os_id", "task_title", "consult_content"]);
+    }
+    if (input.eventType === "oso.consultation.report.generated") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, [
+            "requirement_id",
+            "publisher_os_id",
+            "recipient_os_id",
+            "report_id",
+            "risk_level",
+            "analysis_summary"
+        ]);
+    }
+    if (input.eventType === "oso.recommendation.generated") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, ["requirement_id", "publisher_os_id", "recipient_os_id", "recommend_reason"]);
+        ensureNonEmptyArrayField(payload, "recommend_list");
+    }
+    if (input.eventType === "oso.warning.raised") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, ["requirement_id", "order_id", "publisher_os_id", "warning_level", "warning_reason"]);
+        ensureNonEmptyArrayField(payload, "target_os_ids");
+    }
+    if (input.eventType === "oso.intervention.suggested") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, [
+            "requirement_id",
+            "order_id",
+            "publisher_os_id",
+            "recipient_os_id",
+            "intervention_type",
+            "suggestion"
+        ]);
+    }
+    if ([
+        "wsp.oso.consultation.report.generated",
+        "wsp.oso.recommendation.generated",
+        "wsp.oso.warning.raised",
+        "wsp.oso.intervention.suggested"
+    ].includes(input.eventType)) {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, ["recipient_os_id", "source_event_id", "requirement_id"]);
+        if (input.eventType === "wsp.oso.warning.raised" || input.eventType === "wsp.oso.intervention.suggested") {
+            ensureRequiredFields(payload, ["order_id"]);
+        }
     }
 }

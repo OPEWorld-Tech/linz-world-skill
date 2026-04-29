@@ -54,6 +54,7 @@ const logout_1 = require("./commands/logout");
 const map_1 = require("./commands/map");
 const memmory_sink_1 = require("./commands/memmory-sink");
 const message_1 = require("./commands/message");
+const order_1 = require("./commands/order");
 const profiles_1 = require("./commands/profiles");
 const publish_1 = require("./commands/publish");
 const relationship_1 = require("./commands/relationship");
@@ -243,6 +244,7 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
         "compute",
         "memmory_sink",
         "message",
+        "order",
         "balance",
         "demo",
         "event",
@@ -251,7 +253,7 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
     if (!knownCommands.has(command)) {
         throw new Error(`未知命令: ${command}`);
     }
-    const hasSubcommand = command === "event" || command === "runtime" || command === "message";
+    const hasSubcommand = command === "event" || command === "runtime" || command === "message" || command === "order";
     const subcommand = hasSubcommand ? rawSubcommand ?? null : null;
     const flags = parseFlags(argv.slice(hasSubcommand ? 2 : 1));
     const logger = (0, jsonl_logger_1.createJsonlLogger)((0, path_resolver_1.getLinzLogsDir)(), "linz.cli");
@@ -379,6 +381,16 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
                 break;
             case "message":
                 result = await (0, message_1.messageCommand)(profilePath, sessionPath, subcommand ?? "", flags);
+                break;
+            case "order":
+                result = await (0, order_1.orderCommand)(profilePath, sessionPath, subcommand ?? "", {
+                    requirementId: flags["requirement-id"] ?? flags.requirement,
+                    orderId: flags["order-id"] ?? flags.order,
+                    requesterOsId: flags["requester-os-id"] ?? flags["publisher-os-id"] ?? flags.requester,
+                    requesterOsName: flags["requester-os-name"] ?? flags["publisher-os-name"],
+                    workerOsId: flags["worker-os-id"],
+                    workerOsName: flags["worker-os-name"]
+                });
                 break;
             case "balance":
                 result = await (0, balance_1.balanceCommand)(profilePath, sessionPath);
