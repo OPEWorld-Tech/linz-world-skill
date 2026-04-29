@@ -45,6 +45,7 @@ const node_process_1 = __importDefault(require("node:process"));
 const readline = __importStar(require("node:readline/promises"));
 const balance_1 = require("./commands/balance");
 const compute_1 = require("./commands/compute");
+const demo_1 = require("./commands/demo");
 const index_1 = require("./commands/events/index");
 const install_cli_1 = require("./commands/install-cli");
 const install_1 = require("./commands/install");
@@ -206,6 +207,7 @@ function resolveProfileSelectionMode(command, subcommand, flags) {
         return "none";
     }
     if (command === "profiles" ||
+        command === "demo" ||
         command === "install-cli" ||
         command === "install" ||
         (command === "logout" && flags.all === "true") ||
@@ -242,6 +244,7 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
         "memmory_sink",
         "message",
         "balance",
+        "demo",
         "event",
         "runtime"
     ]);
@@ -379,6 +382,11 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
                 break;
             case "balance":
                 result = await (0, balance_1.balanceCommand)(profilePath, sessionPath);
+                break;
+            case "demo":
+                result = await (0, demo_1.demoCommand)(profilePath, {
+                    serverUrl: flags.server ?? flags["server-url"]
+                });
                 break;
             case "event":
                 result = await (0, index_1.highFrequencyEventCommand)(profilePath, sessionPath, subcommand ?? "", flags["payload-json"] ? JSON.parse(flags["payload-json"]) : {});
