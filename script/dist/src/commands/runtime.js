@@ -127,7 +127,7 @@ async function runtimeCommand(profilePath, subcommand, flags, options = {}) {
     }
     const runtimeConfig = flags.url && !flags.command && !flags.exec
         ? buildHttpRuntimeConfig(flags)
-        : (0, runtime_adapters_1.isKnownRuntimeType)(runtimeType) && (0, connection_config_1.hasComputeProviderAPIKeyConfigured)()
+        : (0, runtime_adapters_1.isKnownRuntimeType)(runtimeType) && (0, connection_config_1.isRuntimeComputeEnabled)() && (0, connection_config_1.hasComputeProviderAPIKeyConfigured)()
             ? buildComputeRuntimeConfig(runtimeType, flags)
             : buildCommandRuntimeConfig(runtimeType, flags);
     const agents = asRecord(profile.agents);

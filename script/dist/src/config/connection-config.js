@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isRuntimeComputeEnabled = isRuntimeComputeEnabled;
 exports.hasComputeProviderAPIKeyConfigured = hasComputeProviderAPIKeyConfigured;
 exports.getDefaultConnectionConfig = getDefaultConnectionConfig;
 const node_fs_1 = require("node:fs");
@@ -13,7 +14,8 @@ const fallbackConfig = {
     runtime_timeout_ms: 300_000,
     heartbeat_interval_ms: 60_000,
     chat_auto_reply_limit: 10,
-    chat_round_cooldown_ms: 600_000
+    chat_round_cooldown_ms: 600_000,
+    runtime_compute_enabled: true
 };
 const computeProviderKeyNames = [
     "ANTHROPIC_API_KEY",
@@ -55,6 +57,31 @@ function loadConfiguredEnvValues() {
     }
     return {};
 }
+function resolveConfiguredEnvValue(values, key) {
+    const processValue = process.env[key];
+    if (typeof processValue === "string" && processValue.trim() !== "") {
+        return processValue;
+    }
+    const fileValue = values[key];
+    return typeof fileValue === "string" && fileValue.trim() !== "" ? fileValue : undefined;
+}
+function resolveBoolean(value, fallback, label) {
+    if (!value) {
+        return fallback;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on", "enabled"].includes(normalized)) {
+        return true;
+    }
+    if (["0", "false", "no", "off", "disabled"].includes(normalized)) {
+        return false;
+    }
+    throw new Error(`${label} 必须是布尔值，可使用 true/false、1/0、yes/no 或 on/off`);
+}
+function isRuntimeComputeEnabled() {
+    const fileValues = loadConfiguredEnvValues();
+    return resolveBoolean(resolveConfiguredEnvValue(fileValues, "LINZ_RUNTIME_COMPUTE_ENABLED"), fallbackConfig.runtime_compute_enabled, "LINZ_RUNTIME_COMPUTE_ENABLED");
+}
 function hasComputeProviderAPIKeyConfigured() {
     const fileValues = loadConfiguredEnvValues();
     return computeProviderKeyNames.some((key) => {
@@ -95,7 +122,8 @@ function getDefaultConnectionConfig() {
             runtime_timeout_ms: resolveRuntimeTimeout(values.RUNTIME_TIMEOUT_MS),
             heartbeat_interval_ms: resolvePositiveInteger(values.HEARTBEAT_INTERVAL_MS, fallbackConfig.heartbeat_interval_ms, "HEARTBEAT_INTERVAL_MS"),
             chat_auto_reply_limit: resolvePositiveInteger(values.CHAT_AUTO_REPLY_LIMIT, fallbackConfig.chat_auto_reply_limit, "CHAT_AUTO_REPLY_LIMIT"),
-            chat_round_cooldown_ms: resolvePositiveInteger(values.CHAT_ROUND_COOLDOWN_MS, fallbackConfig.chat_round_cooldown_ms, "CHAT_ROUND_COOLDOWN_MS")
+            chat_round_cooldown_ms: resolvePositiveInteger(values.CHAT_ROUND_COOLDOWN_MS, fallbackConfig.chat_round_cooldown_ms, "CHAT_ROUND_COOLDOWN_MS"),
+            runtime_compute_enabled: resolveBoolean(resolveConfiguredEnvValue(values, "LINZ_RUNTIME_COMPUTE_ENABLED"), fallbackConfig.runtime_compute_enabled, "LINZ_RUNTIME_COMPUTE_ENABLED")
         };
     }
     return fallbackConfig;

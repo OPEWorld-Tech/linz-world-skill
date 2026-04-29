@@ -306,6 +306,7 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
                     fingerprint: flags["fingerprint"],
                     agent_name: flags["agent-name"],
                     persona_seed: flags["persona-seed"],
+                    type: flags.type ?? flags["os-type"],
                     runtime_type: flags["runtime-type"]
                 }, { sessionPath });
                 break;

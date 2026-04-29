@@ -50,6 +50,25 @@ function normalizeRuntimeConfig(profile) {
         return { runtimeType, runtimeConfig: { ...runtimeConfig, kind } };
     }
     if (kind === "compute") {
+        if (!(0, connection_config_1.isRuntimeComputeEnabled)()) {
+            const adapter = (0, runtime_adapters_1.getRuntimeAdapter)(runtimeType);
+            if (!adapter?.trigger?.length) {
+                throw new Error(`${runtimeType} runtime 已关闭 compute，但缺少可回退的本地 CLI adapter`);
+            }
+            const fallbackArgs = Array.isArray(runtimeConfig.args)
+                ? runtimeConfig.args.map(String)
+                : adapter.trigger.slice(1);
+            return {
+                runtimeType,
+                runtimeConfig: {
+                    ...runtimeConfig,
+                    kind: "command",
+                    command: String(runtimeConfig.command ?? adapter.trigger[0]),
+                    args: fallbackArgs,
+                    timeout_ms: Number(runtimeConfig.timeout_ms ?? 300_000)
+                }
+            };
+        }
         if (!runtimeConfig.model) {
             throw new Error("compute runtime 缺少 model");
         }
@@ -64,7 +83,7 @@ function normalizeRuntimeConfig(profile) {
         };
     }
     const adapter = (0, runtime_adapters_1.getRuntimeAdapter)(runtimeType);
-    if (adapter && (0, connection_config_1.hasComputeProviderAPIKeyConfigured)()) {
+    if (adapter && (0, connection_config_1.isRuntimeComputeEnabled)() && (0, connection_config_1.hasComputeProviderAPIKeyConfigured)()) {
         throw new Error(`${runtimeType} runtime 的旧式 CLI 直连配置已停用，请重新执行 linz runtime configure --type ${runtimeType} --model <MODEL>`);
     }
     if (!adapter && runtimeType !== "custom") {

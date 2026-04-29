@@ -8,6 +8,7 @@ exports.logoutAllCommand = logoutAllCommand;
 const promises_1 = require("node:fs/promises");
 const node_path_1 = __importDefault(require("node:path"));
 const path_resolver_1 = require("../config/path-resolver");
+const api_client_1 = require("../clients/api-client");
 const profile_store_1 = require("../config/profile-store");
 const profile_schema_1 = require("../config/profile-schema");
 const listener_process_1 = require("../state/listener-process");
@@ -18,6 +19,16 @@ async function logoutCommand(profilePath, sessionPath) {
     const profile = await profileStore.load();
     const session = await sessionStore.load(String(profile.profile_id));
     const stoppedPids = await (0, listener_process_1.stopListenerProcesses)(profilePath, sessionPath, session.listenerPid);
+    let serverLogoutReported = false;
+    if (profile.os_id) {
+        try {
+            await new api_client_1.ApiClient({ baseUrl: profile.server_url }).logout(String(profile.os_id));
+            serverLogoutReported = true;
+        }
+        catch {
+            serverLogoutReported = false;
+        }
+    }
     const nextSession = {
         ...(0, session_state_1.createDefaultSessionState)(String(profile.profile_id)),
         profile_id: String(profile.profile_id)
@@ -29,6 +40,7 @@ async function logoutCommand(profilePath, sessionPath) {
     await profileStore.save(profile);
     return {
         loggedOut: true,
+        serverLogoutReported,
         listenerStopped: Boolean(session.listenerPid) || stoppedPids.length > 0
     };
 }
@@ -65,6 +77,16 @@ async function logoutProfileFile(profilePath, sessionPath) {
     const profileStore = new profile_store_1.FileProfileStore(profilePath);
     const sessionStore = new session_state_1.FileSessionStateStore(sessionPath);
     const profile = await profileStore.load();
+    let serverLogoutReported = false;
+    if (profile.os_id) {
+        try {
+            await new api_client_1.ApiClient({ baseUrl: profile.server_url }).logout(String(profile.os_id));
+            serverLogoutReported = true;
+        }
+        catch {
+            serverLogoutReported = false;
+        }
+    }
     const nextSession = {
         ...(0, session_state_1.createDefaultSessionState)(String(profile.profile_id)),
         profile_id: String(profile.profile_id)
@@ -77,6 +99,7 @@ async function logoutProfileFile(profilePath, sessionPath) {
     return {
         profile_id: String(profile.profile_id),
         os_id: profile.os_id ?? null,
+        serverLogoutReported,
         profilePath,
         sessionPath
     };

@@ -152,6 +152,14 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
                 }
             },
             validateAuthorization: async () => session.authorization_state === "valid",
+            onHeartbeat: async () => {
+                try {
+                    await apiClient.heartbeat(os_id);
+                }
+                catch (error) {
+                    await natsLogger.error("server_heartbeat_report_failed", error, { os_id });
+                }
+            },
             onAuthorizationInvalid: async () => {
                 await markAuthorizationRefreshRequired();
             },

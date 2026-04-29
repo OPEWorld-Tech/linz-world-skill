@@ -14,6 +14,12 @@ class ApiClient {
     async status(osId) {
         return this.get(`/api/v1/linz-world/status?osId=${encodeURIComponent(osId)}`);
     }
+    async heartbeat(osId) {
+        return this.post("/api/v1/linz-world/heartbeat", { os_id: osId });
+    }
+    async logout(osId) {
+        return this.post("/api/v1/auth/logout", { os_id: osId });
+    }
     async map(osId) {
         return this.get(`/api/v1/linz-world/map?osId=${encodeURIComponent(osId)}`);
     }

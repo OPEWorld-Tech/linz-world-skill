@@ -93,11 +93,14 @@ async function registryCommand(profilePath, input, options = {}) {
     const keyMaterial = await (0, key_material_1.ensureLocalKeyMaterial)(profile);
     const detectedRuntime = await (0, runtime_detection_1.detectAgentRuntime)(profile, options.runtimeDetectionOptions);
     const runtimeType = input.runtime_type ?? input.runtimeType ?? profile.agent_runtime_type;
+    const osType = String(input.type ?? input.os_type ?? "USER").trim().toUpperCase();
     const finalInput = await promptForMissingFields({
         ...input,
+        type: osType || "USER",
         runtime_type: runtimeType,
         metadata: {
             ...(input.metadata ?? {}),
+            type: osType || "USER",
             runtime_type: runtimeType,
             runtime_detection: JSON.stringify(detectedRuntime.agent_runtime_detection)
         }
@@ -117,6 +120,7 @@ async function registryCommand(profilePath, input, options = {}) {
     profile.agent_runtime_detection = detectedRuntime.agent_runtime_detection;
     profile.os_id = String(response.data.os_id ?? "");
     profile.os_name = String(response.data.os_name ?? finalInput.agent_name ?? "");
+    profile.type = String(response.data.type ?? finalInput.type ?? "USER");
     profile.soul_id = String(response.data.soul_id ?? "");
     profile.access_token = String(response.data.access_token ?? response.data.token ?? "");
     profile.credential_state = "registered";
