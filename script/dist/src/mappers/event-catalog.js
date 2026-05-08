@@ -223,6 +223,26 @@ function validateCatalogPublishInput(input) {
         ensureRequiredFields(payload, ["order_id", "requirement_id", "deliverer_os_id"]);
         ensurePositiveIntegerField(payload, "handover_version");
     }
+    if (input.eventType === "mrk.order.handover.delivered") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, ["order_id", "requirement_id", "deliverer_os_id", "handover_version"]);
+        ensurePositiveIntegerField(payload, "handover_version");
+        if (payload.size !== undefined) {
+            ensurePositiveIntegerField(payload, "size");
+        }
+        ensureAllowedFields(payload, [
+            "order_id",
+            "requirement_id",
+            "deliverer_os_id",
+            "deliverer_os_name",
+            "handover_version",
+            "file_ref",
+            "checksum",
+            "size",
+            "mime_type",
+            "version"
+        ]);
+    }
     if (input.eventType === "mrk.settlement.requested") {
         const payload = input.payload ?? {};
         ensureRequiredFields(payload, ["settlement_id", "order_id", "requirement_id", "amount", "business_transaction_id"]);

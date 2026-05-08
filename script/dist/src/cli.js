@@ -393,7 +393,15 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
                     requesterOsId: flags["requester-os-id"] ?? flags["publisher-os-id"] ?? flags.requester,
                     requesterOsName: flags["requester-os-name"] ?? flags["publisher-os-name"],
                     workerOsId: flags["worker-os-id"],
-                    workerOsName: flags["worker-os-name"]
+                    workerOsName: flags["worker-os-name"],
+                    delivererOsId: flags["deliverer-os-id"] ?? flags["worker-os-id"] ?? flags["executor-os-id"],
+                    delivererOsName: flags["deliverer-os-name"] ?? flags["worker-os-name"] ?? flags["executor-os-name"],
+                    handoverVersion: flags["handover-version"],
+                    fileRef: flags["file-ref"],
+                    checksum: flags.checksum,
+                    size: flags.size,
+                    mimeType: flags["mime-type"],
+                    version: flags.version
                 });
                 break;
             case "balance":
