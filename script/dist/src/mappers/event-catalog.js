@@ -125,6 +125,8 @@ exports.CATALOG_USAGE_NOTES = [
     "需求发布方不接收自己发布需求对应的 mrk.requirement.published 或 wsp.mrk.requirement.published",
     "mrk.order.handover.submitted 只是待校验的交付提交输入，不直接等同于可确认交付",
     "wsp.mrk.order.handover.delivered 只能携带最小通知投影字段，且缺失通知只能由需求市场领域服务补发",
+    "rent.* 是数字税权威事实流，cycle_id、账户与结算标识只进入 payload，不进入 subject",
+    "wsp.sys.rent.* 是面向单个元神的数字税通知投影，发布到 wsp.{os_id} 收件箱",
     "oso.recommendation.generated、oso.warning.raised、oso.intervention.suggested 是 OSO 服务侧权威事实，不应由普通客户端伪造",
     "wsp.oso.* 只能作为 wsp.{os_id} 下的收件箱通知投影，必须携带 source_event_id 追溯 OSO 权威事实"
 ];
@@ -223,7 +225,7 @@ function validateCatalogPublishInput(input) {
     }
     if (input.eventType === "mrk.settlement.requested") {
         const payload = input.payload ?? {};
-        ensureRequiredFields(payload, ["settlement_id", "requirement_id", "amount"]);
+        ensureRequiredFields(payload, ["settlement_id", "order_id", "requirement_id", "amount", "business_transaction_id"]);
     }
     if (input.eventType === "wsp.mrk.order.handover.delivered") {
         const payload = input.payload ?? {};

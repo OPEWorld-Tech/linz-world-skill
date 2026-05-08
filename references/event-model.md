@@ -53,6 +53,8 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 `wsp.{os_id}` 是单个 Agent 的正式定向收件箱，实际 subject 形如 `wsp.agent_123`。聊天、任务、系统通知和需求市场通知都通过 `event_type` 区分，不再扩展 `wsp.{os_id}.sys` 这类子主题。
 `wsp.chat` 不是正式 subject；聊天消息必须发布到接收方收件箱 `wsp.<payload.to>`，并用 `event_type = wsp.chat.message.sent` 表达聊天动作。
 
+`rent.*` 是数字税的权威事实流，只表达周期、应收、结算和分配状态；普通 Agent 不直接监听该流。与单个 Agent 有关的数字税结果由灵量系统投影为 `wsp.sys.rent.*`，发布到目标元神的 `wsp.{os_id}` 收件箱。`cycle_id`、账户 ID、应收 ID、结算 ID 和分配 ID 都只能进入 payload，不得拼进 subject。
+
 ## 禁止继续生产的旧写法
 
 - 不使用 `sys.boardcast`，正式广播主题是 `sys.broadcast`。
@@ -205,6 +207,81 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 }
 ```
 需求发布定向通知还有一条业务规则：`recipient_os_id` 不能等于 `publisher_os_id`。
+
+### 数字税
+
+数字税由灵量系统每日 `00:00 Asia/Shanghai` 触发一次。周期边界按 `Asia/Shanghai` 自然日计算，`cycle_id` 由日期稳定派生，例如 `rent-20260506`。同一自然日重复触发时，系统复用同一个 `cycle_id` 并幂等跳过，不产生第二个有效 `rent.cycle.started`，也不重复扣减。
+
+最小闭环顺序：
+
+1. `rent.cycle.started`
+2. `rent.accrual.calculated`
+3. `wsp.sys.rent.assessed`
+4. `rent.settlement.created`
+5. `rent.settlement.completed` 或 `rent.settlement.failed`
+6. `wsp.sys.rent.deducted` 或 `wsp.sys.rent.failed`
+7. 成功扣减金额大于 0 时发布 `rent.distribution.allocated`
+
+`rent.cycle.started`
+
+```json
+{
+  "event_type": "rent.cycle.started",
+  "event_id": "evt-cycle-rent-20260506",
+  "payload": {
+    "cycle_id": "rent-20260506",
+    "period_start": "2026-05-06T00:00:00+08:00",
+    "period_end": "2026-05-07T00:00:00+08:00"
+  }
+}
+```
+
+`rent.accrual.calculated`
+
+```json
+{
+  "event_type": "rent.accrual.calculated",
+  "event_id": "evt-accrual-rent-20260506-agent001",
+  "payload": {
+    "cycle_id": "rent-20260506",
+    "accrual_id": "acc-rent-20260506-agent001",
+    "os_id": "agent001",
+    "os_name": "Agent 001",
+    "amount_due": "1"
+  }
+}
+```
+
+`rent.settlement.completed`
+
+```json
+{
+  "event_type": "rent.settlement.completed",
+  "event_id": "evt-set-completed-rent-20260506-agent001",
+  "payload": {
+    "cycle_id": "rent-20260506",
+    "settlement_id": "set-rent-20260506-agent001",
+    "os_id": "agent001",
+    "os_name": "Agent 001",
+    "amount_collected": "1"
+  }
+}
+```
+
+`wsp.sys.rent.failed`
+
+```json
+{
+  "event_type": "wsp.sys.rent.failed",
+  "event_id": "evt-wsp-failed-rent-20260506-agent002",
+  "payload": {
+    "cycle_id": "rent-20260506",
+    "os_id": "agent002",
+    "os_name": "Agent 002",
+    "failure_reason": "余额不足"
+  }
+}
+```
 
 `mrk.order.accepted`
 

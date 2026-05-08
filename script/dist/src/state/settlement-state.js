@@ -47,6 +47,9 @@ function deriveRewardBusinessTransactionId(data, existing, requirementId, worker
     }
     return "";
 }
+function isTerminalSettlementState(value) {
+    return ["已完成结算", "结算失败", "扣减失败"].includes(readString(value));
+}
 function deriveSettlementStatePath(sessionPath) {
     if (String(sessionPath).endsWith(".json")) {
         return String(sessionPath).replace(/\.json$/u, ".settlement.json");
@@ -204,7 +207,9 @@ function applySettlementEvent(state, subject, payload) {
             requirement_id,
             order_id,
             executor_account_id: workerOsId || existing?.executor_account_id,
-            settlement_state: existing?.settlement_state,
+            settlement_state: isTerminalSettlementState(existing?.settlement_state)
+                ? existing?.settlement_state
+                : "已交付",
             updated_at: new Date().toISOString()
         });
     }
@@ -263,6 +268,31 @@ function applySettlementEvent(state, subject, payload) {
                 updated_at: new Date().toISOString()
             });
         }
+    }
+    if (eventType === "wsp.mrk.settlement.completed") {
+        const existing = resolveExistingSettlement(state, requirement_id, order_id, settlement_id);
+        return upsertSettlementRecord(state, {
+            settlement_id,
+            requirement_id,
+            order_id,
+            reward_business_transaction_id: transactionId || existing?.reward_business_transaction_id,
+            budget_amount: readString(data.amount, data.budget_amount, data.budgetAmount, existing?.budget_amount),
+            settlement_state: "已完成结算",
+            last_error: null,
+            updated_at: new Date().toISOString()
+        });
+    }
+    if (eventType === "wsp.mrk.settlement.failed") {
+        const existing = resolveExistingSettlement(state, requirement_id, order_id, settlement_id);
+        return upsertSettlementRecord(state, {
+            settlement_id,
+            requirement_id,
+            order_id,
+            reward_business_transaction_id: transactionId || existing?.reward_business_transaction_id,
+            settlement_state: "结算失败",
+            last_error: readString(data.failure_reason, data.failureReason, "结算失败"),
+            updated_at: new Date().toISOString()
+        });
     }
     return state;
 }
