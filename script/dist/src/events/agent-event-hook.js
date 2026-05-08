@@ -39,6 +39,12 @@ function resolveChatSenderOsId(event) {
 function isChatMessageEvent(event) {
     return resolveEventType(event) === "wsp.chat.message.sent";
 }
+function requiresManualHandoverReview(envelope) {
+    return [
+        "mrk.order.handover.delivered",
+        "wsp.mrk.order.handover.delivered"
+    ].includes(String(envelope.event_type ?? ""));
+}
 function isHandledChatFromPeer(record, peerOsId) {
     const event = asRecord(asRecord(record).event);
     return isChatMessageEvent(event) && resolveChatSenderOsId(event) === peerOsId;
@@ -365,6 +371,15 @@ async function processUnreadAgentRecord({ unreadPath, submitedPath, handledPath,
         }
     }
     const pendingEnvelope = buildEnvelopeFromUnreadRecord({ unreadRecord, profile, session });
+    if (requiresManualHandoverReview(pendingEnvelope)) {
+        await logger?.info("agent_runtime_deferred_manual_handover_review", {
+            source,
+            subject: pendingEnvelope.subject,
+            eventType: pendingEnvelope.event_type,
+            eventId: pendingEnvelope.event_id
+        });
+        return { handled: false, invoked: false, deferred: true };
+    }
     const suppression = await suppressChatAutoReplyIfNeeded({
         unreadPath,
         submitedPath,
