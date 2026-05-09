@@ -49,22 +49,6 @@ function normalizeTimeout(value) {
     }
     return timeout;
 }
-function buildComputeRuntimeConfig(type, flags) {
-    if (flags.command || flags.exec) {
-        throw new Error(`${type} runtime 已统一走 compute 接口，不再支持 --command；请改用 --model`);
-    }
-    const model = String(flags.model ?? "").trim();
-    if (!model) {
-        throw new Error(`${type} runtime 必须提供 --model，内置 agent 已统一走 compute 接口`);
-    }
-    return {
-        kind: "compute",
-        model,
-        timeout_ms: normalizeTimeout(flags["timeout-ms"]),
-        configured_by: "linz.runtime.configure",
-        configured_at: new Date().toISOString()
-    };
-}
 function buildCommandRuntimeConfig(type, flags) {
     const adapter = (0, runtime_adapters_1.getRuntimeAdapter)(type);
     const isCustom = (0, runtime_adapters_1.normalizeRuntimeType)(type) === "custom";
@@ -94,6 +78,7 @@ function buildCommandRuntimeConfig(type, flags) {
         kind: "command",
         command,
         args: finalArgs,
+        model: flags.model,
         timeout_ms: normalizeTimeout(flags["timeout-ms"]),
         cwd: flags.cwd,
         configured_by: "linz.runtime.configure",
@@ -127,9 +112,7 @@ async function runtimeCommand(profilePath, subcommand, flags, options = {}) {
     }
     const runtimeConfig = flags.url && !flags.command && !flags.exec
         ? buildHttpRuntimeConfig(flags)
-        : (0, runtime_adapters_1.isKnownRuntimeType)(runtimeType) && (0, connection_config_1.isRuntimeComputeEnabled)() && (0, connection_config_1.hasComputeProviderAPIKeyConfigured)()
-            ? buildComputeRuntimeConfig(runtimeType, flags)
-            : buildCommandRuntimeConfig(runtimeType, flags);
+        : buildCommandRuntimeConfig(runtimeType, flags);
     const agents = asRecord(profile.agents);
     agents[runtimeType] = runtimeConfig;
     profile.agents = agents;

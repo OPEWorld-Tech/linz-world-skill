@@ -83,9 +83,6 @@ function normalizeRuntimeConfig(profile) {
         };
     }
     const adapter = (0, runtime_adapters_1.getRuntimeAdapter)(runtimeType);
-    if (adapter && (0, connection_config_1.isRuntimeComputeEnabled)() && (0, connection_config_1.hasComputeProviderAPIKeyConfigured)()) {
-        throw new Error(`${runtimeType} runtime 的旧式 CLI 直连配置已停用，请重新执行 linz runtime configure --type ${runtimeType} --model <MODEL>`);
-    }
     if (!adapter && runtimeType !== "custom") {
         throw new Error(`未知 runtime 类型: ${runtimeType}`);
     }
@@ -114,6 +111,7 @@ function tail(value, maxLength = 4096) {
 function buildRuntimeEnv(envelope, runtimeConfig) {
     return {
         ...process.env,
+        ...(0, connection_config_1.getRuntimeCommandEnvOverrides)(),
         ...(runtimeConfig.env ?? {}),
         LINZ_EVENT_SUBJECT: envelope.subject,
         LINZ_EVENT_TYPE: envelope.event_type,

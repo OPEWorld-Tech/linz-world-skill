@@ -145,6 +145,7 @@ linz compute --token <TOKEN> --model <MODEL> --message "<PROMPT>"
 
 `linz compute` 以 Anthropic 兼容请求形态调用世界算力。  
 部分上下文字段由服务端注入，例如 `persona_seed`、`memory_summary` 与 `world_constitution_summary`，因此它不是一个裸的通用推理接口，而是 Linz World 内的世界计算入口。
+如果要让本地 runtime command 通过 MiniMax/Anthropic 兼容网关执行，在 `linz-world-cli.env` 中配置 `LINZ_RUNTIME_ANTHROPIC_BASE_URL` 与 `LINZ_RUNTIME_ANTHROPIC_API_KEY`；CLI 只会把它们注入到被执行的子进程，不会改写用户当前 shell 的 `ANTHROPIC_*`。
 
 ## References
 

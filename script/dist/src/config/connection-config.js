@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isRuntimeComputeEnabled = isRuntimeComputeEnabled;
 exports.hasComputeProviderAPIKeyConfigured = hasComputeProviderAPIKeyConfigured;
+exports.getRuntimeCommandEnvOverrides = getRuntimeCommandEnvOverrides;
 exports.getDefaultConnectionConfig = getDefaultConnectionConfig;
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
@@ -22,6 +23,15 @@ const computeProviderKeyNames = [
     "ANTHROPIC_AUTH_TOKEN",
     "OPENAI_API_KEY",
     "MINIMAX_API_KEY"
+];
+const runtimeAnthropicBaseURLKeys = [
+    "LINZ_RUNTIME_ANTHROPIC_BASE_URL",
+    "ANTHROPIC_BASE_URL"
+];
+const runtimeAnthropicAPIKeyKeys = [
+    "LINZ_RUNTIME_ANTHROPIC_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN"
 ];
 function parseEnvFile(content) {
     const values = {};
@@ -65,6 +75,33 @@ function resolveConfiguredEnvValue(values, key) {
     const fileValue = values[key];
     return typeof fileValue === "string" && fileValue.trim() !== "" ? fileValue : undefined;
 }
+function resolveScopedRuntimeEnvValue(values, keys) {
+    for (const key of keys.filter((item) => item.startsWith("LINZ_RUNTIME_"))) {
+        const processValue = process.env[key];
+        if (typeof processValue === "string" && processValue.trim() !== "") {
+            return processValue.trim();
+        }
+    }
+    for (const key of keys.filter((item) => item.startsWith("LINZ_RUNTIME_"))) {
+        const fileValue = values[key];
+        if (typeof fileValue === "string" && fileValue.trim() !== "") {
+            return fileValue.trim();
+        }
+    }
+    for (const key of keys.filter((item) => !item.startsWith("LINZ_RUNTIME_"))) {
+        const fileValue = values[key];
+        if (typeof fileValue === "string" && fileValue.trim() !== "") {
+            return fileValue.trim();
+        }
+    }
+    for (const key of keys.filter((item) => !item.startsWith("LINZ_RUNTIME_"))) {
+        const processValue = process.env[key];
+        if (typeof processValue === "string" && processValue.trim() !== "") {
+            return processValue.trim();
+        }
+    }
+    return undefined;
+}
 function resolveBoolean(value, fallback, label) {
     if (!value) {
         return fallback;
@@ -89,6 +126,20 @@ function hasComputeProviderAPIKeyConfigured() {
         const value = fileValue && fileValue.trim() !== "" ? fileValue : process.env[key];
         return typeof value === "string" && value.trim() !== "";
     });
+}
+function getRuntimeCommandEnvOverrides() {
+    const fileValues = loadConfiguredEnvValues();
+    const overrides = {};
+    const anthropicBaseURL = resolveScopedRuntimeEnvValue(fileValues, runtimeAnthropicBaseURLKeys);
+    const anthropicAPIKey = resolveScopedRuntimeEnvValue(fileValues, runtimeAnthropicAPIKeyKeys) ??
+        (anthropicBaseURL ? resolveScopedRuntimeEnvValue(fileValues, ["MINIMAX_API_KEY"]) : undefined);
+    if (anthropicBaseURL) {
+        overrides.ANTHROPIC_BASE_URL = anthropicBaseURL;
+    }
+    if (anthropicAPIKey) {
+        overrides.ANTHROPIC_API_KEY = anthropicAPIKey;
+    }
+    return overrides;
 }
 function resolveRuntimeTimeout(value) {
     if (!value) {
