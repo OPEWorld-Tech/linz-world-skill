@@ -108,7 +108,20 @@ exports.EVENT_CATALOG = [
         subject: "poca.reputation",
         eventTypes: ["poca.reputation.increased", "poca.reputation.decreased", "poca.reputation.corrected"]
     },
-    { subject: "poca.reward", eventTypes: ["poca.reward.issued", "poca.reward.reversed"] }
+    { subject: "poca.reward", eventTypes: ["poca.reward.issued", "poca.reward.reversed"] },
+    { subject: "co_gov.need", eventTypes: ["co_gov.need.collected"] },
+    { subject: "co_gov.draft", eventTypes: ["co_gov.draft.created"] },
+    { subject: "co_gov.review", eventTypes: ["co_gov.review.passed", "co_gov.review.rejected"] },
+    { subject: "co_gov.vote", eventTypes: ["co_gov.vote.opened", "co_gov.vote.closed"] },
+    { subject: "co_gov.rule", eventTypes: ["co_gov.rule.deposited"] },
+    {
+        subject: "co_gov.dispatch",
+        eventTypes: [
+            "co_gov.rule.dispatch.requested",
+            "co_gov.rule.dispatch.succeeded",
+            "co_gov.rule.dispatch.failed"
+        ]
+    }
 ];
 exports.BLOCKED_EVENT_VALUES = [
     { value: "sys.boardcast", scope: "subject", replacement: "sys.broadcast" },
@@ -128,7 +141,8 @@ exports.CATALOG_USAGE_NOTES = [
     "rent.* 是数字税权威事实流，cycle_id、账户与结算标识只进入 payload，不进入 subject",
     "wsp.sys.rent.* 是面向单个元神的数字税通知投影，发布到 wsp.{os_id} 收件箱",
     "oso.recommendation.generated、oso.warning.raised、oso.intervention.suggested 是 OSO 服务侧权威事实，不应由普通客户端伪造",
-    "wsp.oso.* 只能作为 wsp.{os_id} 下的收件箱通知投影，必须携带 source_event_id 追溯 OSO 权威事实"
+    "wsp.oso.* 只能作为 wsp.{os_id} 下的收件箱通知投影，必须携带 source_event_id 追溯 OSO 权威事实",
+    "co_gov.* 是共治规则沉淀低基数事实流，need_id、rule_id、dispatch_id 等业务标识只能进入 payload"
 ];
 const RESERVED_WSP_INBOX_NAMES = new Set(["chat", "task", "sys", "mrk", "rent", "poca", "apl", "ec", "oso"]);
 function matchesCatalogSubject(subjectPattern, subject) {
@@ -222,26 +236,6 @@ function validateCatalogPublishInput(input) {
         const payload = input.payload ?? {};
         ensureRequiredFields(payload, ["order_id", "requirement_id", "deliverer_os_id"]);
         ensurePositiveIntegerField(payload, "handover_version");
-    }
-    if (input.eventType === "mrk.order.handover.delivered") {
-        const payload = input.payload ?? {};
-        ensureRequiredFields(payload, ["order_id", "requirement_id", "deliverer_os_id", "handover_version"]);
-        ensurePositiveIntegerField(payload, "handover_version");
-        if (payload.size !== undefined) {
-            ensurePositiveIntegerField(payload, "size");
-        }
-        ensureAllowedFields(payload, [
-            "order_id",
-            "requirement_id",
-            "deliverer_os_id",
-            "deliverer_os_name",
-            "handover_version",
-            "file_ref",
-            "checksum",
-            "size",
-            "mime_type",
-            "version"
-        ]);
     }
     if (input.eventType === "mrk.settlement.requested") {
         const payload = input.payload ?? {};
