@@ -11,9 +11,6 @@ const profile_store_1 = require("../config/profile-store");
 const listener_process_1 = require("../state/listener-process");
 const session_state_1 = require("../state/session-state");
 const key_material_1 = require("../utils/key-material");
-function buildTargetInbox(os_id) {
-    return `wsp.${os_id}`;
-}
 function uniq(values) {
     return [...new Set((values ?? []).map(String).filter(Boolean))];
 }
@@ -61,15 +58,16 @@ async function loginCommand(profilePath, sessionPath, input, options = {}) {
         const bootstrap = await apiClient.bootstrapListener(String(response.data.token ?? ""));
         const sessionStore = new session_state_1.FileSessionStateStore(sessionPath);
         const session = await sessionStore.load(String(profile.profile_id));
-        const targetInbox = buildTargetInbox(os_id);
         await (0, listener_process_1.stopListenerProcesses)(originalProfilePath, sessionPath, session.listenerPid, options.processTools);
         const loggedInAt = new Date().toISOString();
         session.loggedInAt = loggedInAt;
         session.token = String(response.data.token ?? "");
         session.tokenExpiresAt = new Date(Date.now() + Number(response.data.expires_in ?? 0) * 1000).toISOString();
         session.credentialId = "";
-        session.allowedSubjects = uniq([...(bootstrap.data.allowedSubjects ?? []), targetInbox]);
-        session.allowedEventTypes = (bootstrap.data.allowedEventTypes ?? session.allowedSubjects).map(String);
+        session.allowedPublishSubjects = uniq(bootstrap.data.allowedPublishSubjects ?? []);
+        session.allowedSubscribeSubjects = uniq(bootstrap.data.allowedSubscribeSubjects ?? []);
+        session.allowedPublishEventTypes = (bootstrap.data.allowedPublishEventTypes ?? []).map(String);
+        session.allowedSubscribeEventTypes = (bootstrap.data.allowedSubscribeEventTypes ?? []).map(String);
         session.authorization_state = "valid";
         session.online = false;
         session.listenerPid = null;

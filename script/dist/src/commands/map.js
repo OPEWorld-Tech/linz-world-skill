@@ -30,16 +30,20 @@ async function mapCommand(profilePath, sessionPath) {
         }
         const response = await apiClient.bootstrapListener(token);
         session.token = session.token || token;
-        session.allowedSubjects = response.data.allowedSubjects;
-        session.allowedEventTypes = response.data.allowedEventTypes;
+        session.allowedPublishSubjects = response.data.allowedPublishSubjects;
+        session.allowedSubscribeSubjects = response.data.allowedSubscribeSubjects;
+        session.allowedPublishEventTypes = response.data.allowedPublishEventTypes;
+        session.allowedSubscribeEventTypes = response.data.allowedSubscribeEventTypes;
         session.authorization_state = "valid";
         await sessionStore.save(session);
         const usageNotes = response.data.usageNotes ?? [];
         return {
             viewVersion: response.data.viewVersion ?? "listener-bootstrap",
             os_id: response.data.osId ?? profile.os_id,
-            allowedSubjects: response.data.allowedSubjects,
-            allowedEventTypes: response.data.allowedEventTypes,
+            allowedPublishSubjects: response.data.allowedPublishSubjects,
+            allowedSubscribeSubjects: response.data.allowedSubscribeSubjects,
+            allowedPublishEventTypes: response.data.allowedPublishEventTypes,
+            allowedSubscribeEventTypes: response.data.allowedSubscribeEventTypes,
             usageNotes: [...usageNotes, ...event_catalog_1.CATALOG_USAGE_NOTES],
             authorizationNotes: response.data.authorizationNotes ?? [],
             fetchedAt: response.data.fetchedAt ?? new Date().toISOString(),
@@ -53,14 +57,16 @@ async function mapCommand(profilePath, sessionPath) {
         if (session.authorization_state !== "valid") {
             throw new Error("当前授权视图不可恢复，请重新登录后再执行 map");
         }
-        if (session.allowedSubjects.length === 0 || session.allowedEventTypes.length === 0) {
+        if (session.allowedPublishSubjects.length === 0 || session.allowedSubscribeSubjects.length === 0) {
             throw new Error("当前没有可用的本地授权缓存，请重新登录后再执行 map");
         }
         return {
             viewVersion: "cache",
             os_id: profile.os_id,
-            allowedSubjects: session.allowedSubjects,
-            allowedEventTypes: session.allowedEventTypes,
+            allowedPublishSubjects: session.allowedPublishSubjects,
+            allowedSubscribeSubjects: session.allowedSubscribeSubjects,
+            allowedPublishEventTypes: session.allowedPublishEventTypes,
+            allowedSubscribeEventTypes: session.allowedSubscribeEventTypes,
             usageNotes: ["当前返回的是本地降级授权视图，请尽快恢复服务端后重新执行 map", ...event_catalog_1.CATALOG_USAGE_NOTES],
             authorizationNotes: ["仅在可恢复的服务端异常下回退本地缓存，当前结果不代表最新权威授权"],
             fetchedAt: new Date().toISOString(),

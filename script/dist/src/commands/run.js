@@ -19,9 +19,6 @@ function isAuthorizationFailure(error) {
     const message = error instanceof Error ? error.message : String(error);
     return message.includes("401") || message.includes("403");
 }
-function buildTargetInbox(os_id) {
-    return `wsp.${os_id}`;
-}
 function uniq(values) {
     return [...new Set(values.map(String).filter(Boolean))];
 }
@@ -37,7 +34,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
     const os_name = String(profile.os_name ?? profile.os_id ?? "");
     (0, command_guards_1.ensureLoggedIn)(profile, session);
     (0, command_guards_1.ensureAuthorizationReady)(session, "监听");
-    if (session.allowedSubjects.length === 0) {
+    if (session.allowedSubscribeSubjects.length === 0) {
         throw new Error("当前没有可监听的授权主题，请先执行 login 或 map");
     }
     const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
@@ -105,18 +102,21 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         // TODO: 当前仅用业务 JWT 向后端拉取监听授权视图。
         // 后续集成 NATS auth callout 后，应由 broker 基于同一业务 JWT 在建连阶段完成最终鉴权。
         const response = await apiClient.bootstrapListener(session.token);
-        const allowedSubjects = uniq([...(response.data.allowedSubjects ?? []).map(String), buildTargetInbox(os_id)]);
+        const allowedSubscribeSubjects = uniq((response.data.allowedSubscribeSubjects ?? []).map(String));
+        const allowedPublishSubjects = uniq((response.data.allowedPublishSubjects ?? []).map(String));
         await saveCurrentListenerSession((latestSession) => {
-            latestSession.allowedSubjects = allowedSubjects;
-            latestSession.allowedEventTypes = (response.data.allowedEventTypes ?? allowedSubjects).map(String);
+            latestSession.allowedSubscribeSubjects = allowedSubscribeSubjects;
+            latestSession.allowedPublishSubjects = allowedPublishSubjects;
+            latestSession.allowedSubscribeEventTypes = (response.data.allowedSubscribeEventTypes ?? []).map(String);
+            latestSession.allowedPublishEventTypes = (response.data.allowedPublishEventTypes ?? []).map(String);
             latestSession.authorization_state = "valid";
         });
         profile.authorization_state = "valid";
         await profileStore.save(profile);
         return {
             ...response.data,
-            allowedSubjects,
-            allowedEventTypes: session.allowedEventTypes
+            allowedSubscribeSubjects,
+            allowedPublishSubjects
         };
     };
     await bootstrapAuthorizationView();
@@ -134,7 +134,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         await (0, run_session_1.runSession)({
             client: natsClient,
             nats_url: profile.nats_url,
-            subjects: session.allowedSubjects,
+            subjects: session.allowedSubscribeSubjects,
             heartbeatPayload: { os_id, os_name },
             heartbeatIntervalMs: options.heartbeatIntervalMs,
             reconnectDelayMs: options.reconnectDelayMs,
@@ -165,7 +165,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
             },
             onSubjectsChanged: async (subjects) => {
                 await saveCurrentListenerSession((latestSession) => {
-                    latestSession.allowedSubjects = subjects;
+                    latestSession.allowedSubscribeSubjects = subjects;
                     latestSession.authorization_state = "valid";
                 });
             },

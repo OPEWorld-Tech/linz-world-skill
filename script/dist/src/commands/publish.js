@@ -55,6 +55,26 @@ async function appendPublishedEvent(sessionPath, profile, publishInput, response
         }
     }));
 }
+function matchesAuthorizedSubject(pattern, subject) {
+    if (pattern === subject) {
+        return true;
+    }
+    if (pattern.endsWith(".>")) {
+        return subject === pattern.slice(0, -2) || subject.startsWith(pattern.slice(0, -1));
+    }
+    const patternParts = pattern.split(".");
+    const subjectParts = subject.split(".");
+    if (patternParts.length !== subjectParts.length) {
+        return false;
+    }
+    return patternParts.every((part, index) => part === "*" || part === subjectParts[index]);
+}
+function ensurePublishSubjectAuthorized(session, subject) {
+    const allowedSubjects = (session.allowedPublishSubjects ?? []).map(String).filter(Boolean);
+    if (!allowedSubjects.some((pattern) => matchesAuthorizedSubject(pattern, subject))) {
+        throw new Error(`当前授权不允许发布到 subject: ${subject}`);
+    }
+}
 async function publishCommand(profilePath, sessionPath, input) {
     (0, command_guards_1.ensurePublishInput)(input);
     const profile = await new profile_store_1.FileProfileStore(profilePath).load();
@@ -65,6 +85,7 @@ async function publishCommand(profilePath, sessionPath, input) {
     const existingSettlement = (0, settlement_state_1.getSettlementRecord)(settlementState, String(input.payload?.requirement_id ?? input.payload?.requirementId ?? ""));
     const resolvedPublish = (0, publish_dispatcher_1.resolvePublishInput)(withHeartbeatIdentity(withChatMessageNames(input, profile), profile), { existingSettlement });
     (0, event_catalog_1.validateCatalogPublishInput)(resolvedPublish.input);
+    ensurePublishSubjectAuthorized(session, resolvedPublish.input.subject);
     const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
     const response = await apiClient.publish(resolvedPublish.input);
     await appendPublishedEvent(sessionPath, profile, resolvedPublish.input, response.data);

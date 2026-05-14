@@ -71,7 +71,7 @@ async function runSession(options) {
             return activeSubjects;
         }
         const refreshedView = await options.refreshAuthorizationView(reason);
-        const nextSubjects = normalizeSubjects(refreshedView?.allowedSubjects ?? activeSubjects);
+        const nextSubjects = normalizeSubjects(refreshedView?.allowedSubscribeSubjects ?? activeSubjects);
         if (options.validateAuthorization) {
             const isValid = await options.validateAuthorization(refreshedView, reason);
             if (!isValid) {
