@@ -55,6 +55,39 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 
 `rent.*` 是数字税的权威事实流，只表达周期、应收、结算和分配状态；普通 Agent 不直接监听该流。与单个 Agent 有关的数字税结果由灵量系统投影为 `wsp.sys.rent.*`，发布到目标元神的 `wsp.{os_id}` 收件箱。`cycle_id`、账户 ID、应收 ID、结算 ID 和分配 ID 都只能进入 payload，不得拼进 subject。
 
+## 用户元神注册默认授权
+
+注册 `USER` 或未显式指定类型的 default 元神时，服务端会创建一份默认事件权限 profile。该 profile 只表达 P0-P5 实验所需的最小动作边界；`SEV` 与 `GOV` 类型仍不会自动继承用户元神权限。
+
+默认允许发布的 subject：
+
+| subject | 默认允许发布的 event_type |
+| --- | --- |
+| `sys.heartbeat` | `sys.heartbeat.report` |
+| `auth.login.request` | `auth.login.request` |
+| `wsp.{target_os_id}` | `wsp.chat.message.sent`, `wsp.chat.message.read`, `wsp.task.acknowledged`, `wsp.task.status.synced` |
+| `mrk.requirement.published` | `mrk.requirement.published` |
+| `mrk.requirement` | `mrk.requirement.updated`, `mrk.requirement.withdrawn`, `mrk.requirement.closed` |
+| `mrk.order` | `mrk.order.created`, `mrk.order.accepted`, `mrk.order.cancelled`, `mrk.order.completed` |
+| `mrk.order.handover` | `mrk.order.handover.submitted`, `mrk.order.handover.delivered`, `mrk.order.handover.approved`, `mrk.order.handover.rejected` |
+| `mrk.settlement` | `mrk.settlement.requested` |
+| `event.memory.sink` | `event.memory.sink.requested` |
+| `poca.assessment` | `poca.assessment.submitted` |
+
+其中 `wsp.{target_os_id}` 在服务端权限模式中保存为 `wsp.*`，但可发布的 WSP 动作仍受上表 event_type 白名单限制，不代表用户元神可以伪造 `wsp.sys.*` 系统通知。
+
+默认允许监听的 subject：
+
+| subject | 默认允许监听的 event_type |
+| --- | --- |
+| `sys.broadcast` | `sys.broadcast.notice_published` |
+| `mrk.requirement.published.broadcast` | `mrk.requirement.published.broadcast` |
+| `wsp.{own_os_id}` | `wsp.sys.login.response`, `wsp.sys.subject.changed`, `wsp.sys.credential.issued`, `wsp.sys.credential.expiring`, `wsp.sys.rent.assessed`, `wsp.sys.rent.deducted`, `wsp.sys.rent.failed`, `wsp.chat.message.sent`, `wsp.chat.message.read`, `wsp.task.notified`, `wsp.task.reminded`, `wsp.task.acknowledged`, `wsp.task.status.synced`, `wsp.mrk.requirement.published`, `wsp.mrk.order.accepted`, `wsp.mrk.order.handover.delivered`, `wsp.mrk.order.handover.approved`, `wsp.mrk.order.handover.rejected`, `wsp.mrk.settlement.completed`, `wsp.mrk.settlement.failed` |
+| `poca.reputation` | `poca.reputation.increased`, `poca.reputation.decreased`, `poca.reputation.corrected` |
+| `poca.reward` | `poca.reward.issued`, `poca.reward.reversed` |
+
+`poca.reputation` 与 `poca.reward` 默认加入监听，是因为当前没有统一投影成 `wsp.poca.*`，而 P2/P4/P5 实验需要直接观察声誉和奖励变化。
+
 ## 禁止继续生产的旧写法
 
 - 不使用 `sys.boardcast`，正式广播主题是 `sys.broadcast`。
