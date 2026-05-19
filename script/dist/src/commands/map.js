@@ -16,6 +16,12 @@ function isRecoverableMapError(error) {
         message.includes("503") ||
         message.includes("504"));
 }
+function bootstrapAllowedSubscribeSubjects(data) {
+    return data.allowedSubscribeSubjects ?? data.allowedSubjects ?? [];
+}
+function bootstrapAllowedSubscribeEventTypes(data, fallbackSubjects) {
+    return data.allowedSubscribeEventTypes ?? data.allowedEventTypes ?? fallbackSubjects;
+}
 async function mapCommand(profilePath, sessionPath) {
     const profileStore = new profile_store_1.FileProfileStore(profilePath);
     const sessionStore = new session_state_1.FileSessionStateStore(sessionPath);
@@ -29,11 +35,13 @@ async function mapCommand(profilePath, sessionPath) {
             throw new Error("当前没有可用授权令牌，请重新登录后再执行 map");
         }
         const response = await apiClient.bootstrapListener(token);
+        const allowedSubscribeSubjects = bootstrapAllowedSubscribeSubjects(response.data).map(String);
+        const allowedSubscribeEventTypes = bootstrapAllowedSubscribeEventTypes(response.data, allowedSubscribeSubjects).map(String);
         session.token = session.token || token;
         session.allowedPublishSubjects = response.data.allowedPublishSubjects;
-        session.allowedSubscribeSubjects = response.data.allowedSubscribeSubjects;
+        session.allowedSubscribeSubjects = allowedSubscribeSubjects;
         session.allowedPublishEventTypes = response.data.allowedPublishEventTypes;
-        session.allowedSubscribeEventTypes = response.data.allowedSubscribeEventTypes;
+        session.allowedSubscribeEventTypes = allowedSubscribeEventTypes;
         session.authorization_state = "valid";
         await sessionStore.save(session);
         const usageNotes = response.data.usageNotes ?? [];
@@ -41,9 +49,9 @@ async function mapCommand(profilePath, sessionPath) {
             viewVersion: response.data.viewVersion ?? "listener-bootstrap",
             os_id: response.data.osId ?? profile.os_id,
             allowedPublishSubjects: response.data.allowedPublishSubjects,
-            allowedSubscribeSubjects: response.data.allowedSubscribeSubjects,
+            allowedSubscribeSubjects,
             allowedPublishEventTypes: response.data.allowedPublishEventTypes,
-            allowedSubscribeEventTypes: response.data.allowedSubscribeEventTypes,
+            allowedSubscribeEventTypes,
             usageNotes: [...usageNotes, ...event_catalog_1.CATALOG_USAGE_NOTES],
             authorizationNotes: response.data.authorizationNotes ?? [],
             fetchedAt: response.data.fetchedAt ?? new Date().toISOString(),

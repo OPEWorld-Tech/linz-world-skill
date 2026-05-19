@@ -14,6 +14,12 @@ const key_material_1 = require("../utils/key-material");
 function uniq(values) {
     return [...new Set((values ?? []).map(String).filter(Boolean))];
 }
+function bootstrapAllowedSubscribeSubjects(data) {
+    return data.allowedSubscribeSubjects ?? data.allowedSubjects ?? [];
+}
+function bootstrapAllowedSubscribeEventTypes(data, fallbackSubjects) {
+    return data.allowedSubscribeEventTypes ?? data.allowedEventTypes ?? fallbackSubjects;
+}
 function asRecord(value) {
     return value && typeof value === "object" ? value : {};
 }
@@ -65,9 +71,9 @@ async function loginCommand(profilePath, sessionPath, input, options = {}) {
         session.tokenExpiresAt = new Date(Date.now() + Number(response.data.expires_in ?? 0) * 1000).toISOString();
         session.credentialId = "";
         session.allowedPublishSubjects = uniq(bootstrap.data.allowedPublishSubjects ?? []);
-        session.allowedSubscribeSubjects = uniq(bootstrap.data.allowedSubscribeSubjects ?? []);
+        session.allowedSubscribeSubjects = uniq(bootstrapAllowedSubscribeSubjects(bootstrap.data));
         session.allowedPublishEventTypes = (bootstrap.data.allowedPublishEventTypes ?? []).map(String);
-        session.allowedSubscribeEventTypes = (bootstrap.data.allowedSubscribeEventTypes ?? []).map(String);
+        session.allowedSubscribeEventTypes = bootstrapAllowedSubscribeEventTypes(bootstrap.data, session.allowedSubscribeSubjects).map(String);
         session.authorization_state = "valid";
         session.online = false;
         session.listenerPid = null;
