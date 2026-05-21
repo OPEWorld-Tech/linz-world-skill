@@ -62,6 +62,7 @@ const registry_1 = require("./commands/registry");
 const run_1 = require("./commands/run");
 const runtime_1 = require("./commands/runtime");
 const status_1 = require("./commands/status");
+const upload_1 = require("./commands/upload");
 const profile_store_1 = require("./config/profile-store");
 const path_resolver_1 = require("./config/path-resolver");
 const error_mapping_1 = require("./errors/error-mapping");
@@ -211,6 +212,9 @@ function resolveProfileSelectionMode(command, subcommand, flags) {
     if (command === "compute" && flags.token) {
         return "none";
     }
+    if (command === "upload" && (flags.server || flags["server-url"])) {
+        return "none";
+    }
     if (command === "profiles" ||
         command === "demo" ||
         command === "install-cli" ||
@@ -252,7 +256,8 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
         "balance",
         "demo",
         "event",
-        "runtime"
+        "runtime",
+        "upload"
     ]);
     if (!knownCommands.has(command)) {
         throw new Error(`未知命令: ${command}`);
@@ -410,6 +415,12 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
                 break;
             case "runtime":
                 result = await (0, runtime_1.runtimeCommand)(profilePath, subcommand ?? "", flags);
+                break;
+            case "upload":
+                result = await (0, upload_1.uploadCommand)(profilePath, {
+                    filePath: flags.file ?? (rawSubcommand?.startsWith("--") ? undefined : rawSubcommand),
+                    serverUrl: flags.server ?? flags["server-url"]
+                });
                 break;
         }
         await logger.info("command_succeeded", {
