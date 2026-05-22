@@ -22,12 +22,6 @@ function isAuthorizationFailure(error) {
 function uniq(values) {
     return [...new Set(values.map(String).filter(Boolean))];
 }
-function bootstrapAllowedSubscribeSubjects(data) {
-    return data.allowedSubscribeSubjects ?? data.allowedSubjects ?? [];
-}
-function bootstrapAllowedSubscribeEventTypes(data, fallbackSubjects) {
-    return data.allowedSubscribeEventTypes ?? data.allowedEventTypes ?? fallbackSubjects;
-}
 async function listenCommand(profilePath, sessionPath, options = {}) {
     const profileStore = new profile_store_1.FileProfileStore(profilePath);
     const profile = await profileStore.load();
@@ -108,13 +102,12 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         // TODO: 当前仅用业务 JWT 向后端拉取监听授权视图。
         // 后续集成 NATS auth callout 后，应由 broker 基于同一业务 JWT 在建连阶段完成最终鉴权。
         const response = await apiClient.bootstrapListener(session.token);
-        const allowedSubscribeSubjects = uniq(bootstrapAllowedSubscribeSubjects(response.data).map(String));
+        const allowedSubscribeSubjects = uniq((response.data.allowedSubscribeSubjects ?? []).map(String));
         const allowedPublishSubjects = uniq((response.data.allowedPublishSubjects ?? []).map(String));
-        const allowedSubscribeEventTypes = bootstrapAllowedSubscribeEventTypes(response.data, allowedSubscribeSubjects).map(String);
         await saveCurrentListenerSession((latestSession) => {
             latestSession.allowedSubscribeSubjects = allowedSubscribeSubjects;
             latestSession.allowedPublishSubjects = allowedPublishSubjects;
-            latestSession.allowedSubscribeEventTypes = allowedSubscribeEventTypes;
+            latestSession.allowedSubscribeEventTypes = (response.data.allowedSubscribeEventTypes ?? []).map(String);
             latestSession.allowedPublishEventTypes = (response.data.allowedPublishEventTypes ?? []).map(String);
             latestSession.authorization_state = "valid";
         });
@@ -123,8 +116,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         return {
             ...response.data,
             allowedSubscribeSubjects,
-            allowedPublishSubjects,
-            allowedSubscribeEventTypes
+            allowedPublishSubjects
         };
     };
     await bootstrapAuthorizationView();

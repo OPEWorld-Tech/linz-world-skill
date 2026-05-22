@@ -55,6 +55,9 @@ class ApiClient {
             candidateMetadata: input.candidateMetadata ?? {}
         });
     }
+    async createTaskBubble(input) {
+        return this.post("/api/v1/bubbles/tasks", input);
+    }
     async listRelationships(osId) {
         return this.get(`/api/v1/memory/relationships/${encodeURIComponent(osId)}`);
     }

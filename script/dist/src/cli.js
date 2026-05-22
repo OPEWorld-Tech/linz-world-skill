@@ -46,7 +46,10 @@ const readline = __importStar(require("node:readline/promises"));
 const balance_1 = require("./commands/balance");
 const compute_1 = require("./commands/compute");
 const demo_1 = require("./commands/demo");
+const acceptance_1 = require("./commands/acceptance");
+const dispute_1 = require("./commands/dispute");
 const index_1 = require("./commands/events/index");
+const gov_1 = require("./commands/gov");
 const install_cli_1 = require("./commands/install-cli");
 const install_1 = require("./commands/install");
 const login_1 = require("./commands/login");
@@ -62,6 +65,7 @@ const registry_1 = require("./commands/registry");
 const run_1 = require("./commands/run");
 const runtime_1 = require("./commands/runtime");
 const status_1 = require("./commands/status");
+const task_1 = require("./commands/task");
 const upload_1 = require("./commands/upload");
 const profile_store_1 = require("./config/profile-store");
 const path_resolver_1 = require("./config/path-resolver");
@@ -253,6 +257,10 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
         "memmory_sink",
         "message",
         "order",
+        "task",
+        "gov",
+        "acceptance",
+        "dispute",
         "balance",
         "demo",
         "event",
@@ -262,7 +270,14 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
     if (!knownCommands.has(command)) {
         throw new Error(`未知命令: ${command}`);
     }
-    const hasSubcommand = command === "event" || command === "runtime" || command === "message" || command === "order";
+    const hasSubcommand = (command === "event" ||
+        command === "runtime" ||
+        command === "message" ||
+        command === "order" ||
+        command === "task" ||
+        command === "gov" ||
+        command === "acceptance" ||
+        command === "dispute");
     const subcommand = hasSubcommand ? rawSubcommand ?? null : null;
     const flags = parseFlags(argv.slice(hasSubcommand ? 2 : 1));
     const logger = (0, jsonl_logger_1.createJsonlLogger)((0, path_resolver_1.getLinzLogsDir)(), "linz.cli");
@@ -398,7 +413,60 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
                     requesterOsId: flags["requester-os-id"] ?? flags["publisher-os-id"] ?? flags.requester,
                     requesterOsName: flags["requester-os-name"] ?? flags["publisher-os-name"],
                     workerOsId: flags["worker-os-id"],
-                    workerOsName: flags["worker-os-name"]
+                    workerOsName: flags["worker-os-name"],
+                    delivererOsId: flags["deliverer-os-id"],
+                    delivererOsName: flags["deliverer-os-name"],
+                    handoverVersion: flags["handover-version"],
+                    artifactRef: flags["artifact-ref"] ?? flags.artifact,
+                    checksum: flags.checksum,
+                    size: flags.size,
+                    mimeType: flags["mime-type"],
+                    version: flags.version
+                });
+                break;
+            case "task":
+                result = await (0, task_1.taskCommand)(profilePath, sessionPath, subcommand ?? "", {
+                    parentBubbleId: flags["parent-bubble-id"] ?? flags.parent,
+                    name: flags.name,
+                    goal: flags.goal,
+                    techLeadOsId: flags["tech-lead-os-id"],
+                    techLeadOsName: flags["tech-lead-os-name"],
+                    slotsJson: flags["slots-json"],
+                    membraneJson: flags["membrane-json"],
+                    acceptanceJson: flags["acceptance-json"],
+                    dissolutionJson: flags["dissolution-json"] ?? flags["dissolution-contract-json"]
+                });
+                break;
+            case "gov":
+                result = await (0, gov_1.govCommand)(profilePath, sessionPath, subcommand ?? "", {
+                    requirementId: flags["requirement-id"] ?? flags.requirement,
+                    publisherOsId: flags["publisher-os-id"] ?? flags.publisher,
+                    recipientOsId: flags["recipient-os-id"] ?? flags.recipient,
+                    reportId: flags["report-id"],
+                    riskLevel: flags["risk-level"],
+                    analysisSummary: flags["analysis-summary"] ?? flags.summary
+                });
+                break;
+            case "acceptance":
+                result = await (0, acceptance_1.acceptanceCommand)(profilePath, sessionPath, subcommand ?? "", {
+                    requirementId: flags["requirement-id"] ?? flags.requirement,
+                    orderId: flags["order-id"] ?? flags.order,
+                    handoverVersion: flags["handover-version"],
+                    reviewerOsId: flags["reviewer-os-id"],
+                    reviewerOsName: flags["reviewer-os-name"],
+                    reason: flags.reason ?? flags["rejection-reason"]
+                });
+                break;
+            case "dispute":
+                result = await (0, dispute_1.disputeCommand)(profilePath, sessionPath, subcommand ?? "", {
+                    needId: flags["need-id"],
+                    sourceOsId: flags["source-os-id"],
+                    title: flags.title,
+                    suggestedRuleType: flags["suggested-rule-type"],
+                    suggestedTargetRef: flags["suggested-target-ref"],
+                    ruleId: flags["rule-id"],
+                    ruleVersion: flags["rule-version"],
+                    ruleType: flags["rule-type"]
                 });
                 break;
             case "balance":
