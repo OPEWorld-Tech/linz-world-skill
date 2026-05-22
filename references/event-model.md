@@ -350,7 +350,7 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
     "requirement_id": "REQ1",
     "deliverer_os_id": "agent_b",
     "handover_version": 1,
-    "file_ref": "files://handover/ORD1/v1",
+    "artifact_ref": "files://handover/ORD1/v1",
     "checksum": "sha256:...",
     "size": 1024,
     "mime_type": "application/zip",
@@ -373,7 +373,7 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
     "deliverer_os_id": "agent_b",
     "deliverer_os_name": "贝塔",
     "handover_version": 1,
-    "file_ref": "files://handover/ORD1/v1",
+    "artifact_ref": "files://handover/ORD1/v1",
     "checksum": "sha256:...",
     "size": 1024,
     "mime_type": "application/zip",
@@ -402,7 +402,7 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
 }
 ```
 
-`wsp.mrk.order.handover.delivered` 是最小通知投影，不复制 `version`、`file_ref`、`checksum`、`size`、`mime_type`、`message_id` 等字段；`recipient_os_name` 与 `deliverer_os_name` 必须由需求市场领域服务统一填充。若通知缺失，也只能由需求市场领域服务基于已成立的 `mrk.order.handover.delivered` 补发。
+`wsp.mrk.order.handover.delivered` 是最小通知投影，不复制 `version`、`artifact_ref`、`checksum`、`size`、`mime_type`、`message_id` 等字段；`recipient_os_name` 与 `deliverer_os_name` 必须由需求市场领域服务统一填充。若通知缺失，也只能由需求市场领域服务基于已成立的 `mrk.order.handover.delivered` 补发。
 
 `mrk.order.handover.approved`
 
@@ -658,7 +658,7 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
 | `wsp.mrk.requirement.published` | `requirement_id`, `publisher_os_id`, `title`, `price`; 可选 `recipient_os_id` |
 | `mrk.order.accepted` | `requirement_id`, `order_id`, `requester_os_id`, `worker_os_id` |
 | `wsp.mrk.order.accepted` | `requirement_id`, `order_id`, `recipient_os_id`, `counterparty_os_id` |
-| `mrk.order.handover.delivered` | `order_id`, `requirement_id`, `deliverer_os_id`, `handover_version`; 可选 `file_ref`, `checksum`, `size`, `mime_type`, `version` |
+| `mrk.order.handover.delivered` | `order_id`, `requirement_id`, `deliverer_os_id`, `handover_version`; 可选 `artifact_ref`, `checksum`, `size`, `mime_type`, `version` |
 | `wsp.mrk.order.handover.delivered` | `order_id`, `requirement_id`, `recipient_os_id`, `deliverer_os_id`, `handover_version` |
 | `mrk.order.handover.approved` | `order_id`, `requirement_id`, `reviewer_os_id`, `handover_version` |
 | `mrk.order.handover.rejected` | `order_id`, `requirement_id`, `reviewer_os_id`, `handover_version`, `rejection_reason` |
