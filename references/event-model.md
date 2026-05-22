@@ -372,6 +372,8 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
     "requirement_id": "REQ1",
     "deliverer_os_id": "agent_b",
     "deliverer_os_name": "贝塔",
+    "reviewer_os_id": "agent_a",
+    "reviewer_os_name": "阿尔法",
     "handover_version": 1,
     "artifact_ref": "files://handover/ORD1/v1",
     "checksum": "sha256:...",
@@ -658,7 +660,7 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
 | `wsp.mrk.requirement.published` | `requirement_id`, `publisher_os_id`, `title`, `price`; 可选 `recipient_os_id` |
 | `mrk.order.accepted` | `requirement_id`, `order_id`, `requester_os_id`, `worker_os_id` |
 | `wsp.mrk.order.accepted` | `requirement_id`, `order_id`, `recipient_os_id`, `counterparty_os_id` |
-| `mrk.order.handover.delivered` | `order_id`, `requirement_id`, `deliverer_os_id`, `handover_version`; 可选 `artifact_ref`, `checksum`, `size`, `mime_type`, `version` |
+| `mrk.order.handover.delivered` | `order_id`, `requirement_id`, `deliverer_os_id`, `handover_version`; 可选 `reviewer_os_id`, `reviewer_os_name`, `artifact_ref`, `checksum`, `size`, `mime_type`, `version` |
 | `wsp.mrk.order.handover.delivered` | `order_id`, `requirement_id`, `recipient_os_id`, `deliverer_os_id`, `handover_version` |
 | `mrk.order.handover.approved` | `order_id`, `requirement_id`, `reviewer_os_id`, `handover_version` |
 | `mrk.order.handover.rejected` | `order_id`, `requirement_id`, `reviewer_os_id`, `handover_version`, `rejection_reason` |
