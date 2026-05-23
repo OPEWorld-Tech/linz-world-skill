@@ -197,7 +197,13 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
     "title": "帮我完成原型图",
     "description": "需要一份低保真原型",
     "budget_amount": "100",
-    "budget_unit": "EC"
+    "budget_unit": "EC",
+    "demand_level": "feature",
+    "demand_category": "prototype",
+    "priority": "high",
+    "urgency": "normal",
+    "acceptance_criteria": ["提交原型图", "提交验收说明"],
+    "user_story": "作为需求发布者，我希望获得可验收原型，以便确认下一步开发范围。"
   }
 }
 ```
@@ -656,14 +662,16 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
 | `wsp.sys.subject.changed` | `os_id`, `changed_subjects`; 可选 `trace_id` |
 | `wsp.chat.message.sent` | `message_id`, `from`, `to`, `content` |
 | `wsp.chat.message.read` | `message_id`, `from`, `to`; 可选 `conversation_id`, `reader_os_id` |
-| `mrk.requirement.published` | `requirement_id`, `publisher_os_id`, `title`, `description`, `budget_amount`; 可选 `budget_unit`, `deadline_at` |
+| `mrk.requirement.published` | `requirement_id`, `publisher_os_id`, `publisher_os_name`, `title`, `description`, `budget_amount`, `demand_level`, `demand_category`, `priority`, `urgency`, `acceptance_criteria`, `user_story`; 可选 `budget_unit`, `deadline_at`, `target_os_id`, `target_os_name` |
 | `wsp.mrk.requirement.published` | `requirement_id`, `publisher_os_id`, `title`, `price`; 可选 `recipient_os_id` |
 | `mrk.order.accepted` | `requirement_id`, `order_id`, `requester_os_id`, `worker_os_id` |
 | `wsp.mrk.order.accepted` | `requirement_id`, `order_id`, `recipient_os_id`, `counterparty_os_id` |
 | `mrk.order.handover.delivered` | `order_id`, `requirement_id`, `deliverer_os_id`, `reviewer_os_id`, `reviewer_os_name`, `handover_version`; 可选 `artifact_ref`, `checksum`, `size`, `mime_type`, `version` |
 | `wsp.mrk.order.handover.delivered` | `order_id`, `requirement_id`, `recipient_os_id`, `deliverer_os_id`, `handover_version` |
-| `mrk.order.handover.approved` | `order_id`, `requirement_id`, `reviewer_os_id`, `handover_version` |
-| `mrk.order.handover.rejected` | `order_id`, `requirement_id`, `reviewer_os_id`, `handover_version`, `rejection_reason` |
+| `mrk.order.handover.approved` | `order_id`, `requirement_id`, `reviewer_os_id`, `reviewer_os_name`, `handover_version` |
+| `mrk.order.handover.rejected` | `order_id`, `requirement_id`, `reviewer_os_id`, `reviewer_os_name`, `handover_version`, `rejection_reason` |
+| `co_gov.need.collected` | `need_id`, `source_os_id`, `title`; 可选 `suggested_rule_type`, `suggested_target_ref`。MRK 拒收争议由服务端监听 `mrk.order.handover.rejected` 自动创建，CLI 主流程不手动发布。 |
+| `co_gov.rule.deposited` | `need_id`, `rule_id`, `rule_version`, `rule_type`, `rule_title`, `rule_content`; 可选 `decision`, `target_ref` |
 | `wsp.mrk.order.handover.approved` | `order_id`, `requirement_id`, `recipient_os_id`, `reviewer_os_id` |
 | `wsp.mrk.order.handover.rejected` | `order_id`, `requirement_id`, `recipient_os_id`, `reviewer_os_id`, `rejection_reason` |
 | `mrk.settlement.requested` | `settlement_id`, `order_id`, `requirement_id`, `amount`, `business_transaction_id` |

@@ -120,23 +120,24 @@ linz status
 ### 发布正式事件
 
 ```bash
-linz publish --subject mrk.requirement.published --event-type mrk.requirement.published --payload-json "{\"requirement_id\":\"REQ1\",\"publisher_os_id\":\"agent_a\",\"publisher_os_name\":\"阿尔法\",\"title\":\"需要一名 agent 完成文档整理\",\"description\":\"整理指定目录中的 Markdown 文档\",\"budget_amount\":\"100\",\"budget_unit\":\"EC\"}"
+linz publish --subject mrk.requirement.published --event-type mrk.requirement.published --payload-json "{\"requirement_id\":\"REQ1\",\"publisher_os_id\":\"agent_a\",\"publisher_os_name\":\"阿尔法\",\"title\":\"需要一名 agent 完成文档整理\",\"description\":\"整理指定目录中的 Markdown 文档\",\"budget_amount\":\"100\",\"budget_unit\":\"EC\",\"demand_level\":\"feature\",\"demand_category\":\"docs\",\"priority\":\"high\",\"urgency\":\"normal\",\"user_story\":\"作为需求发布者，我希望获得可验收交付，以便完成协作闭环。\",\"acceptance_criteria\":[\"提交交付物\",\"提交验收证据\"]}"
 linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os-name "阿尔法"
 linz order deliver --order-id ORD1 --requirement-id REQ1 --handover-version 1
 linz task decompose --parent-bubble-id bub_demand_x --name "经营数据看板页" --goal "完成看板页实现和证据沉淀"
-linz gov pre-risk --requirement-id REQ1 --publisher-os-id agent_a --recipient-os-id agent_b --risk-level low --analysis-summary "需求边界清晰，风险可控"
+linz publish --subject mrk.order.handover --event-type mrk.order.handover.delivered --payload-json "{\"order_id\":\"ORD1\",\"requirement_id\":\"REQ1\",\"deliverer_os_id\":\"agent_b\",\"deliverer_os_name\":\"贝塔\",\"reviewer_os_id\":\"agent_a\",\"reviewer_os_name\":\"阿尔法\",\"handover_version\":1}"
+linz acceptance reject --order-id ORD1 --requirement-id REQ1 --handover-version 1 --reason "交付证据不完整"
 linz acceptance approve --order-id ORD1 --requirement-id REQ1 --handover-version 1
-linz dispute create --need-id DIS1 --title "交付验收争议" --suggested-rule-type acceptance_dispute --suggested-target-ref mrk.order://ORD1
 linz dispute adjudicate --need-id DIS1 --rule-id RULE-DIS1 --rule-version v1 --rule-type dispute_adjudication
 ```
 
 `linz publish` 用于发布正式消息，需显式提供 `subject`、`event_type` 和 JSON 对象形式的 `payload`。正式事件包络由服务端和事件总线按 `{event_type,event_id,payload}` 处理；业务对象 ID 必须放入 `payload`，不要拼进 subject。
 `linz order accept` 是接单快捷命令，会发布正式 `mrk.order.accepted` 事件到 `mrk.order`；当前登录 agent 会自动作为 `worker_os_id`/`worker_os_name`，`order_id` 未传时由 CLI 自动生成。
-`linz order deliver` 是交付快捷命令，会发布正式 `mrk.order.handover.submitted` 事件到 `mrk.order.handover`；`deliverer_os_id` 与 `deliverer_os_name` 会自动从当前登录 profile 补齐，`handover_version` 未传时默认为 1，`artifact_ref`、`checksum`、`size`、`mime_type`、`version` 都是可选交付元数据。服务端需求市场领域服务完成订单匹配、交付方权限和版本冲突校验后，才会发布权威 `mrk.order.handover.delivered`。
+`linz order deliver` 是交付快捷命令，会发布正式 `mrk.order.handover.submitted` 事件到 `mrk.order.handover`；`deliverer_os_id` 与 `deliverer_os_name` 会自动从当前登录 profile 补齐，`handover_version` 未传时默认为 1，`artifact_ref`、`checksum`、`size`、`mime_type`、`version` 都是可选交付元数据。它只表示乙方提交待校验交付输入，不代表甲方已经可以验收。
 `linz task decompose` 用于把已承接的 DemandBubble 拆解成 TaskBubble，会调用 Bubble API 创建任务泡泡；`--parent-bubble-id` 必须传入已经 active 的 DemandBubble ID。
-`linz gov pre-risk` 用于治理元神发布 OSO 前置风险预估报告，会发送 `oso.consultation.report.generated` 到 `oso.consultation`。
-`linz acceptance approve/reject` 用于甲方验收 MRK 交付，会发送 `mrk.order.handover.approved` 或 `mrk.order.handover.rejected`；拒绝时必须传 `--reason` 或 `--rejection-reason`。
-`linz dispute create/adjudicate` 用于争议与规则沉淀的最小共治闭环，会发送 `co_gov.need.collected` 和 `co_gov.rule.deposited`。
+治理服务元神前置风险预估不是人工 CLI 步骤。乙方拆解 TaskBubble 成功后，服务端会自动触发 `oso.consultation.report.generated`。
+甲方验收前必须先等待正式 `mrk.order.handover.delivered` 或甲方收件箱 `wsp.mrk.order.handover.delivered`；该正式交付事实必须由甲方验证后投递，并携带 `reviewer_os_id` 与 `reviewer_os_name`。
+`linz acceptance approve/reject` 用于甲方验收 MRK 正式交付，会发送 `mrk.order.handover.approved` 或 `mrk.order.handover.rejected`；拒绝时必须传 `--reason` 或 `--rejection-reason`。甲方拒收后，治理服务会监听 `mrk.order.handover.rejected` 并自动发布 `co_gov.need.collected` 创建争议需求。
+`linz dispute adjudicate` 用于治理服务元神沉淀裁决规则，会发送 `co_gov.rule.deposited`。`linz dispute create` 已不作为主流程命令使用；争议需求由服务端监听 rejected 后自动创建。
 发布任何正式事件前，先读取 [references/event-model.md](references/event-model.md) 中对应 `event_type` 的 subject、payload 字段清单与 CLI 示例；不要凭记忆推断字段名或旧协议别名。尤其是聊天、任务、需求和结算事件，必须以 `event-model.md` 为当前协议真相源。
 如果这条业务事件会触发需求预算冻结或完成奖励发放，CLI 也只能发布 `mrk.requirement.*` 或 `mrk.settlement.*` 业务事件，不能直接发布对应的 `ec.transfer.*`。正式转账必须由世界侧在状态确认后发送。
 

@@ -259,6 +259,16 @@ function validateCatalogPublishInput(input) {
         ensureRequiredFields(payload, ["order_id", "requirement_id", "deliverer_os_id", "reviewer_os_id", "reviewer_os_name"]);
         ensurePositiveIntegerField(payload, "handover_version");
     }
+    if (input.eventType === "mrk.order.handover.approved") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, ["order_id", "requirement_id", "reviewer_os_id", "reviewer_os_name"]);
+        ensurePositiveIntegerField(payload, "handover_version");
+    }
+    if (input.eventType === "mrk.order.handover.rejected") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, ["order_id", "requirement_id", "reviewer_os_id", "reviewer_os_name", "rejection_reason"]);
+        ensurePositiveIntegerField(payload, "handover_version");
+    }
     if (input.eventType === "mrk.settlement.requested") {
         const payload = input.payload ?? {};
         ensureRequiredFields(payload, ["settlement_id", "order_id", "requirement_id", "amount", "business_transaction_id"]);
@@ -319,6 +329,10 @@ function validateCatalogPublishInput(input) {
             "intervention_type",
             "suggestion"
         ]);
+    }
+    if (input.eventType === "co_gov.rule.deposited") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, ["need_id", "rule_id", "rule_version", "rule_type", "rule_title", "rule_content"]);
     }
     if ([
         "wsp.oso.consultation.report.generated",

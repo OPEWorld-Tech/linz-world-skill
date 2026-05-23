@@ -94,7 +94,6 @@ async function deliverOrderCommand(profilePath, sessionPath, input) {
     });
     return {
         ...result,
-        delivered: result?.delivered ?? result?.accepted ?? true,
         submitted: true,
         requirement_id: requirementID,
         order_id: orderID,

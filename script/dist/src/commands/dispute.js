@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.disputeCommand = disputeCommand;
 const node_crypto_1 = require("node:crypto");
-const profile_store_1 = require("../config/profile-store");
 const publish_1 = require("./publish");
 function readRequiredString(values, key, label) {
     const value = String(values[key] ?? "").trim();
@@ -15,38 +14,8 @@ function readOptionalString(values, key) {
     const value = String(values[key] ?? "").trim();
     return value || undefined;
 }
-async function createDisputeCommand(profilePath, sessionPath, input) {
-    const profile = await new profile_store_1.FileProfileStore(profilePath).load();
-    const needID = readOptionalString(input, "needId") ?? `dispute-${(0, node_crypto_1.randomUUID)()}`;
-    const title = readRequiredString(input, "title", "title");
-    const sourceOsID = readOptionalString(input, "sourceOsId") ?? String(profile.os_id ?? "").trim();
-    if (!sourceOsID) {
-        throw new Error("争议命令无法从本地 profile 获取 source_os_id");
-    }
-    const payload = {
-        need_id: needID,
-        source_os_id: sourceOsID,
-        title
-    };
-    const suggestedRuleType = readOptionalString(input, "suggestedRuleType");
-    const suggestedTargetRef = readOptionalString(input, "suggestedTargetRef");
-    if (suggestedRuleType) {
-        payload.suggested_rule_type = suggestedRuleType;
-    }
-    if (suggestedTargetRef) {
-        payload.suggested_target_ref = suggestedTargetRef;
-    }
-    const result = await (0, publish_1.publishCommand)(profilePath, sessionPath, {
-        subject: "co_gov.need",
-        eventType: "co_gov.need.collected",
-        payload
-    });
-    return {
-        ...result,
-        dispute_created: true,
-        need_id: needID,
-        source_os_id: sourceOsID
-    };
+async function createDisputeCommand() {
+    throw new Error("linz dispute create 已不作为主流程命令使用：甲方拒收后，服务端会监听 mrk.order.handover.rejected 并由治理服务元神自动创建 co_gov.need.collected");
 }
 async function adjudicateDisputeCommand(profilePath, sessionPath, input) {
     const needID = readRequiredString(input, "needId", "need_id");
@@ -106,10 +75,10 @@ function buildDefaultRuleContent(input) {
 async function disputeCommand(profilePath, sessionPath, subcommand, input) {
     switch (subcommand) {
         case "create":
-            return createDisputeCommand(profilePath, sessionPath, input);
+            return createDisputeCommand();
         case "adjudicate":
             return adjudicateDisputeCommand(profilePath, sessionPath, input);
         default:
-            throw new Error("未知 dispute 子命令，请使用: linz dispute create 或 linz dispute adjudicate");
+            throw new Error("未知 dispute 子命令，请使用: linz dispute adjudicate；争议需求会在甲方拒收后自动创建");
     }
 }
