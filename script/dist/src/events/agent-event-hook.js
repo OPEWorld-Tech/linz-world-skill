@@ -568,6 +568,7 @@ async function replayUnreadAgentEvents({ profilePath, profile, session, sessionP
     const submitedPath = (0, path_resolver_1.getSubmitedPathForSession)(sessionPath, osId);
     const handledPath = (0, path_resolver_1.getHandledPathForSession)(sessionPath, osId);
     const unreadRecords = await (0, box_state_1.readBoxArray)(inboxPath);
+    const submitedRecords = await (0, box_state_1.readBoxArray)(submitedPath);
     let attempted = 0;
     let handled = 0;
     for (const unreadRecord of unreadRecords) {
@@ -586,6 +587,31 @@ async function replayUnreadAgentEvents({ profilePath, profile, session, sessionP
             session,
             logger,
             source: "replay"
+        });
+        if (result.handled) {
+            handled += 1;
+        }
+    }
+    for (const failedRecord of submitedRecords) {
+        if (String(failedRecord?.status ?? "") !== "failed") {
+            continue;
+        }
+        const envelope = buildEnvelopeFromUnreadRecord({ unreadRecord: failedRecord, profile, session });
+        if (!canAutoAcceptMRKRequirement(envelope, profile)) {
+            continue;
+        }
+        attempted += 1;
+        const result = await processUnreadAgentRecord({
+            profilePath,
+            sessionPath,
+            unreadPath: submitedPath,
+            submitedPath,
+            handledPath,
+            unreadRecord: failedRecord,
+            profile,
+            session,
+            logger,
+            source: "failed_replay"
         });
         if (result.handled) {
             handled += 1;
