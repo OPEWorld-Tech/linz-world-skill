@@ -34,6 +34,8 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
     const os_name = String(profile.os_name ?? profile.os_id ?? "");
     (0, command_guards_1.ensureLoggedIn)(profile, session);
     (0, command_guards_1.ensureAuthorizationReady)(session, "监听");
+    session.allowedSubscribeSubjects = uniq(session.allowedSubscribeSubjects ?? session.allowedSubjects ?? []);
+    session.allowedPublishSubjects = uniq(session.allowedPublishSubjects ?? []);
     if (session.allowedSubscribeSubjects.length === 0) {
         throw new Error("当前没有可监听的授权主题，请先执行 login 或 map");
     }
