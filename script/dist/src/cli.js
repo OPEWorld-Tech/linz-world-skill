@@ -466,7 +466,11 @@ async function main(argv = node_process_1.default.argv.slice(2), options = {}) {
                     suggestedTargetRef: flags["suggested-target-ref"],
                     ruleId: flags["rule-id"],
                     ruleVersion: flags["rule-version"],
-                    ruleType: flags["rule-type"]
+                    ruleType: flags["rule-type"],
+                    ruleTitle: flags["rule-title"],
+                    ruleContent: flags["rule-content"],
+                    decision: flags.decision,
+                    targetRef: flags["target-ref"]
                 });
                 break;
             case "balance":

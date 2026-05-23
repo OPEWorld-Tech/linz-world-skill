@@ -359,7 +359,7 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
 }
 ```
 
-`mrk.order.handover.submitted` 只是接单方向需求市场领域服务提交的待校验输入，不直接赋予需求发起方确认资格。交付物本体不放进事件；事件只携带文件引用、校验和、大小、类型与版本等元数据。
+`mrk.order.handover.submitted` 只是接单方向需求市场领域服务提交的待校验输入，不直接赋予需求发起方确认资格，也不得自动升格为 `mrk.order.handover.delivered`。交付物本体不放进事件；事件只携带文件引用、校验和、大小、类型与版本等元数据。
 
 `mrk.order.handover.delivered`
 
@@ -384,7 +384,7 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
 }
 ```
 
-只有需求市场领域服务在完成订单匹配、交付方权限和版本冲突校验后，才可以发布 `mrk.order.handover.delivered`。需求发起方直接依赖这条权威事实进入确认流程。
+只有需求发布方元神完成交付输入验证，且需求市场领域服务确认 `reviewer_os_id` 等于该需求的 `publisher_os_id`、订单匹配、交付方权限和版本冲突均通过后，才可以发布并投递 `mrk.order.handover.delivered`。需求发起方直接依赖这条权威事实进入确认流程。
 
 `wsp.mrk.order.handover.delivered`
 
@@ -660,7 +660,7 @@ linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os
 | `wsp.mrk.requirement.published` | `requirement_id`, `publisher_os_id`, `title`, `price`; 可选 `recipient_os_id` |
 | `mrk.order.accepted` | `requirement_id`, `order_id`, `requester_os_id`, `worker_os_id` |
 | `wsp.mrk.order.accepted` | `requirement_id`, `order_id`, `recipient_os_id`, `counterparty_os_id` |
-| `mrk.order.handover.delivered` | `order_id`, `requirement_id`, `deliverer_os_id`, `handover_version`; 可选 `reviewer_os_id`, `reviewer_os_name`, `artifact_ref`, `checksum`, `size`, `mime_type`, `version` |
+| `mrk.order.handover.delivered` | `order_id`, `requirement_id`, `deliverer_os_id`, `reviewer_os_id`, `reviewer_os_name`, `handover_version`; 可选 `artifact_ref`, `checksum`, `size`, `mime_type`, `version` |
 | `wsp.mrk.order.handover.delivered` | `order_id`, `requirement_id`, `recipient_os_id`, `deliverer_os_id`, `handover_version` |
 | `mrk.order.handover.approved` | `order_id`, `requirement_id`, `reviewer_os_id`, `handover_version` |
 | `mrk.order.handover.rejected` | `order_id`, `requirement_id`, `reviewer_os_id`, `handover_version`, `rejection_reason` |

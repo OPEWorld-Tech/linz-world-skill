@@ -232,9 +232,31 @@ function validateCatalogPublishInput(input) {
             throw new Error("需求发布方不接收自己发布的需求消息");
         }
     }
+    if (input.eventType === "mrk.requirement.published") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, [
+            "requirement_id",
+            "publisher_os_id",
+            "publisher_os_name",
+            "title",
+            "description",
+            "budget_amount",
+            "demand_level",
+            "demand_category",
+            "priority",
+            "urgency",
+            "user_story"
+        ]);
+        ensureNonEmptyArrayField(payload, "acceptance_criteria");
+    }
     if (input.eventType === "mrk.order.handover.submitted") {
         const payload = input.payload ?? {};
         ensureRequiredFields(payload, ["order_id", "requirement_id", "deliverer_os_id"]);
+        ensurePositiveIntegerField(payload, "handover_version");
+    }
+    if (input.eventType === "mrk.order.handover.delivered") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, ["order_id", "requirement_id", "deliverer_os_id", "reviewer_os_id", "reviewer_os_name"]);
         ensurePositiveIntegerField(payload, "handover_version");
     }
     if (input.eventType === "mrk.settlement.requested") {

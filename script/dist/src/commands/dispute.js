@@ -53,23 +53,55 @@ async function adjudicateDisputeCommand(profilePath, sessionPath, input) {
     const ruleID = readOptionalString(input, "ruleId") ?? `rule-${(0, node_crypto_1.randomUUID)()}`;
     const ruleVersion = readOptionalString(input, "ruleVersion") ?? "v1";
     const ruleType = readOptionalString(input, "ruleType") ?? "dispute_adjudication";
+    const ruleTitle = readOptionalString(input, "ruleTitle") ?? `争议裁决规则 ${ruleID}`;
+    const targetRef = readOptionalString(input, "targetRef");
+    const decision = readOptionalString(input, "decision");
+    const ruleContent = readOptionalString(input, "ruleContent") ?? buildDefaultRuleContent({
+        needID,
+        ruleID,
+        ruleType,
+        decision,
+        targetRef
+    });
+    const payload = {
+        need_id: needID,
+        rule_id: ruleID,
+        rule_version: ruleVersion,
+        rule_type: ruleType,
+        rule_title: ruleTitle,
+        rule_content: ruleContent
+    };
+    if (decision) {
+        payload.decision = decision;
+    }
+    if (targetRef) {
+        payload.target_ref = targetRef;
+    }
     const result = await (0, publish_1.publishCommand)(profilePath, sessionPath, {
         subject: "co_gov.rule",
         eventType: "co_gov.rule.deposited",
-        payload: {
-            need_id: needID,
-            rule_id: ruleID,
-            rule_version: ruleVersion,
-            rule_type: ruleType
-        }
+        payload
     });
     return {
         ...result,
         dispute_adjudicated: true,
         need_id: needID,
         rule_id: ruleID,
-        rule_version: ruleVersion
+        rule_version: ruleVersion,
+        rule_title: ruleTitle
     };
+}
+function buildDefaultRuleContent(input) {
+    const decision = input.decision ?? "supplement_required";
+    const target = input.targetRef ?? `co_gov.need://${input.needID}`;
+    return [
+        `规则 ${input.ruleID} 适用于 ${target}。`,
+        `规则类型：${input.ruleType}。`,
+        `裁决结论：${decision}。`,
+        "交付验收争议中，若交付物缺少测试记录、经营指标截图或 EvidenceBubble 证据引用，甲方可以拒收并要求乙方补充证据。",
+        "乙方补充后的新版本必须重新提交 handover.submitted，并由甲方验证后投递 handover.delivered，之后才允许 approve。",
+        "只有基于正式 delivered 的 approve 才能进入结算链路。"
+    ].join("\n");
 }
 async function disputeCommand(profilePath, sessionPath, subcommand, input) {
     switch (subcommand) {

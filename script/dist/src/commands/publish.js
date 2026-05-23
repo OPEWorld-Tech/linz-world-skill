@@ -96,5 +96,12 @@ async function publishCommand(profilePath, sessionPath, input) {
         });
         await settlementStore.save(nextSettlementState);
     }
+    else {
+        const nextSettlementState = (0, settlement_state_1.applySettlementEvent)(settlementState, resolvedPublish.input.subject, {
+            event_type: resolvedPublish.input.eventType,
+            payload: resolvedPublish.input.payload
+        });
+        await settlementStore.save(nextSettlementState);
+    }
     return response.data;
 }
