@@ -600,14 +600,19 @@ async function replayUnreadAgentEvents({ profilePath, profile, session, sessionP
         if (!canAutoAcceptMRKRequirement(envelope, profile)) {
             continue;
         }
+        const restoredRecord = {
+            ...failedRecord,
+            status: "unread"
+        };
+        await (0, box_state_1.restoreSubmitedBoxRecordToUnread)(submitedPath, inboxPath, restoredRecord);
         attempted += 1;
         const result = await processUnreadAgentRecord({
             profilePath,
             sessionPath,
-            unreadPath: submitedPath,
+            unreadPath: inboxPath,
             submitedPath,
             handledPath,
-            unreadRecord: failedRecord,
+            unreadRecord: restoredRecord,
             profile,
             session,
             logger,
