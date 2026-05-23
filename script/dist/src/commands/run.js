@@ -62,6 +62,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
         }
         replayRunning = true;
         replayChain = (0, agent_event_hook_1.replayUnreadAgentEvents)({
+            profilePath,
             profile,
             session,
             sessionPath,
@@ -179,6 +180,7 @@ async function listenCommand(profilePath, sessionPath, options = {}) {
                     await (0, agent_event_hook_1.handleAgentEvent)({
                         subject,
                         payload,
+                        profilePath,
                         profile,
                         session,
                         sessionPath,

@@ -9,9 +9,11 @@ exports.appendAgentInboxEvent = appendAgentInboxEvent;
 exports.replayUnreadAgentEvents = replayUnreadAgentEvents;
 exports.handleAgentEvent = handleAgentEvent;
 const node_child_process_1 = require("node:child_process");
+const node_crypto_1 = require("node:crypto");
 const node_path_1 = __importDefault(require("node:path"));
 const connection_config_1 = require("../config/connection-config");
 const path_resolver_1 = require("../config/path-resolver");
+const publish_1 = require("../commands/publish");
 const box_state_1 = require("../state/box-state");
 const runtime_adapter_1 = require("./runtime-adapter");
 function asRecord(value) {
@@ -44,6 +46,105 @@ function requiresManualHandoverReview(envelope) {
         "mrk.order.handover.delivered",
         "wsp.mrk.order.handover.delivered"
     ].includes(String(envelope.event_type ?? ""));
+}
+function isMRKRequirementOffer(envelope) {
+    return [
+        "mrk.requirement.published.broadcast",
+        "wsp.mrk.requirement.published"
+    ].includes(String(envelope.event_type ?? ""));
+}
+function resolveRequirementPayload(envelope) {
+    return resolveNestedPayload(envelope.payload);
+}
+function canAutoAcceptMRKRequirement(envelope, profile) {
+    if (!isMRKRequirementOffer(envelope)) {
+        return false;
+    }
+    if (String(profile.type ?? "USER").trim().toUpperCase() !== "USER") {
+        return false;
+    }
+    const payload = resolveRequirementPayload(envelope);
+    const requirementId = String(payload.requirement_id ?? "").trim();
+    const publisherOsId = String(payload.publisher_os_id ?? "").trim();
+    const recipientOsId = String(payload.recipient_os_id ?? payload.target_os_id ?? "").trim();
+    const ownOsId = String(profile.os_id ?? "").trim();
+    if (!requirementId || !ownOsId || publisherOsId === ownOsId) {
+        return false;
+    }
+    return !recipientOsId || recipientOsId === ownOsId;
+}
+function buildAutoAcceptOrderId(requirementId, workerOsId) {
+    const suffix = (0, node_crypto_1.createHash)("sha256")
+        .update(`${requirementId}:${workerOsId}`)
+        .digest("hex")
+        .slice(0, 12);
+    return `ORD-${requirementId}-${suffix}`;
+}
+async function autoAcceptMRKRequirementIfNeeded({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, envelope, profile, logger, source }) {
+    if (!profilePath || !canAutoAcceptMRKRequirement(envelope, profile)) {
+        return { handled: false, invoked: false };
+    }
+    const payload = resolveRequirementPayload(envelope);
+    const requirementId = String(payload.requirement_id ?? "").trim();
+    const workerOsId = String(profile.os_id ?? "").trim();
+    const claimedRecord = await (0, box_state_1.moveUnreadBoxRecordToSubmited)(unreadPath, submitedPath, String(unreadRecord.index ?? ""), "policy");
+    if (!claimedRecord) {
+        return { handled: false, invoked: false };
+    }
+    const orderId = buildAutoAcceptOrderId(requirementId, workerOsId);
+    try {
+        const result = await (0, publish_1.publishCommand)(profilePath, sessionPath, {
+            subject: "mrk.order",
+            eventType: "mrk.order.accepted",
+            payload: {
+                requirement_id: requirementId,
+                order_id: orderId,
+                requester_os_id: String(payload.publisher_os_id ?? "").trim(),
+                requester_os_name: String(payload.publisher_os_name ?? "").trim(),
+                worker_os_id: workerOsId,
+                worker_os_name: String(profile.os_name ?? workerOsId).trim()
+            }
+        });
+        await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
+        await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
+            handler_type: "policy",
+            source,
+            result: {
+                schema_version: "linz.agent_runtime_policy_result.v1",
+                action: "mrk_requirement_auto_accepted",
+                requirement_id: requirementId,
+                order_id: orderId,
+                event_id: envelope.event_id,
+                event_type: envelope.event_type,
+                subject: envelope.subject,
+                publish_response: result
+            }
+        }));
+        await logger?.info("agent_mrk_requirement_auto_accepted", {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id,
+            requirementId,
+            orderId,
+            workerOsId
+        });
+        return { handled: true, invoked: true };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await (0, box_state_1.markSubmitedBoxRecordFailed)(submitedPath, String(claimedRecord.index ?? ""), message);
+        await logger?.error("agent_mrk_requirement_auto_accept_failed", error, {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id,
+            requirementId,
+            orderId,
+            workerOsId
+        });
+        return { handled: false, invoked: true };
+    }
 }
 function isHandledChatFromPeer(record, peerOsId) {
     const event = asRecord(asRecord(record).event);
@@ -353,8 +454,24 @@ async function suppressChatAutoReplyIfNeeded({ unreadPath, submitedPath, handled
     });
     return { suppressed: true, handled: true, invoked: false };
 }
-async function processUnreadAgentRecord({ unreadPath, submitedPath, handledPath, unreadRecord, profile, session, logger, source }) {
+async function processUnreadAgentRecord({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, profile, session, logger, source }) {
     const hookConfig = normalizeHookConfig(profile);
+    const pendingEnvelope = buildEnvelopeFromUnreadRecord({ unreadRecord, profile, session });
+    const autoAccept = await autoAcceptMRKRequirementIfNeeded({
+        profilePath,
+        sessionPath,
+        unreadPath,
+        submitedPath,
+        handledPath,
+        unreadRecord,
+        envelope: pendingEnvelope,
+        profile,
+        logger,
+        source
+    });
+    if (autoAccept.handled || autoAccept.invoked) {
+        return autoAccept;
+    }
     if (!hookConfig) {
         try {
             if (!(0, runtime_adapter_1.hasRuntimeAgentEventHandler)(profile)) {
@@ -370,7 +487,6 @@ async function processUnreadAgentRecord({ unreadPath, submitedPath, handledPath,
             return { handled: false, invoked: false };
         }
     }
-    const pendingEnvelope = buildEnvelopeFromUnreadRecord({ unreadRecord, profile, session });
     if (requiresManualHandoverReview(pendingEnvelope)) {
         await logger?.info("agent_runtime_deferred_manual_handover_review", {
             source,
@@ -446,7 +562,7 @@ async function processUnreadAgentRecord({ unreadPath, submitedPath, handledPath,
         return { handled: false, invoked: true };
     }
 }
-async function replayUnreadAgentEvents({ profile, session, sessionPath, logger }) {
+async function replayUnreadAgentEvents({ profilePath, profile, session, sessionPath, logger }) {
     const osId = resolveEnvelopeOsId(profile);
     const inboxPath = resolveInboxPath(sessionPath, osId, profile);
     const submitedPath = (0, path_resolver_1.getSubmitedPathForSession)(sessionPath, osId);
@@ -460,6 +576,8 @@ async function replayUnreadAgentEvents({ profile, session, sessionPath, logger }
         }
         attempted += 1;
         const result = await processUnreadAgentRecord({
+            profilePath,
+            sessionPath,
             unreadPath: inboxPath,
             submitedPath,
             handledPath,
@@ -486,7 +604,7 @@ async function replayUnreadAgentEvents({ profile, session, sessionPath, logger }
         handled
     };
 }
-async function handleAgentEvent({ subject, payload, profile, session, sessionPath, logger }) {
+async function handleAgentEvent({ subject, payload, profilePath, profile, session, sessionPath, logger }) {
     const hookConfig = normalizeHookConfig(profile);
     const envelope = buildAgentEventEnvelope({ subject, payload, profile, session });
     const inboxPath = resolveInboxPath(sessionPath, envelope.os_id, profile);
@@ -508,6 +626,8 @@ async function handleAgentEvent({ subject, payload, profile, session, sessionPat
         eventId: envelope.event_id
     });
     const result = await processUnreadAgentRecord({
+        profilePath,
+        sessionPath,
         unreadPath: inboxPath,
         submitedPath,
         handledPath,

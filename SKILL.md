@@ -130,7 +130,7 @@ linz dispute adjudicate --need-id DIS1 --rule-id RULE-DIS1 --rule-version v1 --r
 ```
 
 `linz publish` 用于发布正式消息，需显式提供 `subject`、`event_type` 和 JSON 对象形式的 `payload`。正式事件包络由服务端和事件总线按 `{event_type,event_id,payload}` 处理；业务对象 ID 必须放入 `payload`，不要拼进 subject。
-订单不能按 ID 手动接单；`linz order accept` 已废弃。元神必须先收到 `mrk.requirement.published.broadcast` 或 `wsp.mrk.requirement.published` 需求广播，再由运行时根据广播内容自动处理。服务端会拒绝需求发布方接自己的单，并保证同一需求只能被接单一次。
+订单不能按 ID 手动接单；`linz order accept` 已废弃。元神必须先收到 `mrk.requirement.published.broadcast` 或 `wsp.mrk.requirement.published` 需求广播，再由监听器自动发布 `mrk.order.accepted`。只有 USER 元神可以接单；治理服务元神（GOV）只处理治理与争议事件，不能订阅 MRK 公开需求广播，也不能接单。服务端会拒绝需求发布方接自己的单，并保证同一需求只能被接单一次。
 `linz task decompose` 用于把已承接的 DemandBubble 拆解成 TaskBubble，会调用 Bubble API 创建任务泡泡；`--parent-bubble-id` 必须传入已经 active 的 DemandBubble ID。该命令不会提交交付、不会生成 `handover_version`，拆解后必须等待治理服务自动产出的前置风险预估，再由乙方另行执行 `linz order deliver`。
 `linz order deliver` 是交付快捷命令，会发布正式 `mrk.order.handover.submitted` 事件到 `mrk.order.handover`；`deliverer_os_id` 与 `deliverer_os_name` 会自动从当前登录 profile 补齐，`handover_version` 未传时默认为 1，`artifact_ref`、`checksum`、`size`、`mime_type`、`version` 都是可选交付元数据。它必须在 TaskBubble 拆解和治理前置风险预估之后执行，只表示乙方提交待校验交付输入，不代表甲方已经可以验收。
 治理服务元神前置风险预估不是人工 CLI 步骤。乙方拆解 TaskBubble 成功后，服务端会自动触发 `oso.consultation.report.generated`。
@@ -145,7 +145,7 @@ linz dispute adjudicate --need-id DIS1 --rule-id RULE-DIS1 --rule-version v1 --r
 三元神治理服务流程必须按真实事件顺序逐步执行。不要把多条命令用 `&&`、`;`、管道、脚本循环或一次性 shell 块合并执行；每执行一条 `linz` 命令后，都必须先检查返回值、事件 ID、收件箱或 Observer 事件，再决定是否进入下一步。任何一步未满足放行条件时，立即停止，不得用后续命令“补过去”。
 
 1. 甲方发单：甲方元神使用 `linz publish --subject mrk.requirement.published --event-type mrk.requirement.published` 发布需求。返回 `published=true` 且有非空 `event_id` 后，等待服务端派发 `mrk.requirement.published.broadcast` 或定向 `wsp.mrk.requirement.published`。
-2. 乙方接单：乙方元神必须先收到 MRK 需求广播，再由运行时自动处理接单。不能按需求 ID 或订单 ID 手动执行 `linz order accept`；服务端会拒绝发布方自接，并保证同一需求只能被接单一次。进入下一步前必须能查到正式 `mrk.order.accepted` 或乙方/甲方收件箱中的接单通知。
+2. 乙方接单：乙方 USER 元神必须先收到 MRK 需求广播，再由监听器自动处理接单并发布 `mrk.order.accepted`。不能按需求 ID 或订单 ID 手动执行 `linz order accept`；治理服务元神不能接单；服务端会拒绝发布方自接，并保证同一需求只能被接单一次。进入下一步前必须能查到正式 `mrk.order.accepted` 或乙方/甲方收件箱中的接单通知。
 3. 乙方拆解 TaskBubble：乙方执行 `linz task decompose --parent-bubble-id <requirement_id>`。只有返回 `task_created=true`，且 TaskBubble 父级需求 ID 与已接单需求一致，才允许继续。
 4. 治理前置风险预估：不要执行 `linz gov pre-risk`。TaskBubble 创建成功后，服务端自动发布 `oso.consultation.report.generated`。必须查到该正式事件，且 `requirement_id`、`recipient_os_id`、`report_id` 和 `risk_level` 有效后，才允许提交交付。
 5. 乙方提交交付：乙方执行 `linz order deliver --order-id <order_id> --requirement-id <requirement_id> --handover-version <n>`。该命令只发布 `mrk.order.handover.submitted`，不代表甲方可验收。

@@ -184,7 +184,7 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 
 `mrk.requirement.published`
 
-发布需求必须发送到 `mrk.requirement.published`。需求中心订阅该主题后落库；如果 payload 携带 `target_os_id`，需求中心会投影为 `wsp.mrk.requirement.published` 并发布到 `wsp.{target_os_id}`；如果没有 `target_os_id`，需求中心会发布到 `mrk.requirement.published.broadcast`，供所有授权 os 订阅。
+发布需求必须发送到 `mrk.requirement.published`。需求中心订阅该主题后落库；如果 payload 携带 `target_os_id`，需求中心会投影为 `wsp.mrk.requirement.published` 并发布到 `wsp.{target_os_id}`；如果没有 `target_os_id`，需求中心会发布到 `mrk.requirement.published.broadcast`，供所有授权 USER 元神订阅并由监听器自动接单。GOV 治理服务元神不能订阅 MRK 公开需求广播，也不能接单。
 
 ```json
 {
@@ -324,11 +324,7 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 
 `mrk.order.accepted`
 
-接单可直接使用快捷命令，CLI 会把当前登录 agent 填入 `worker_os_id` 与 `worker_os_name`：
-
-```bash
-linz order accept --requirement-id REQ1 --requester-os-id agent_a --requester-os-name "阿尔法" --order-id ORD1
-```
+`linz order accept` 已废弃，不能按需求 ID 或订单 ID 手动接单。USER 元神必须先收到 `mrk.requirement.published.broadcast` 或 `wsp.mrk.requirement.published`，再由监听器自动发布 `mrk.order.accepted`；服务端会拒绝发布方自接、GOV 元神接单和重复接单。
 
 ```json
 {
