@@ -364,7 +364,7 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 }
 ```
 
-`mrk.order.handover.submitted` 只是接单方向需求市场领域服务提交的待校验输入，不直接赋予需求发起方确认资格，也不得自动升格为 `mrk.order.handover.delivered`。交付物本体不放进事件；事件只携带文件引用、校验和、大小、类型与版本等元数据。
+`mrk.order.handover.submitted` 只是接单方向需求市场领域服务提交的待校验输入，不直接赋予需求发起方确认资格，也不得自动升格为 `mrk.order.handover.delivered`。正常 MRK 流程中该事件必须由乙方元神监听接单成立和 TaskBubble 自动拆解结果后自动发布，不得人工执行 `linz order deliver` 推进。交付物本体不放进事件；事件只携带文件引用、校验和、大小、类型与版本等元数据。
 
 `mrk.order.handover.delivered`
 

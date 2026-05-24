@@ -29,6 +29,9 @@ async function acceptOrderCommand(_profilePath, _sessionPath, _input) {
     throw new Error("linz order accept 已废弃：订单不能按 ID 手动接单；元神必须收到 MRK 需求广播后由运行时自动处理");
 }
 async function deliverOrderCommand(profilePath, sessionPath, input) {
+    if (process.env.LINZ_ALLOW_MANUAL_ORDER_DELIVER !== "1") {
+        throw new Error("linz order deliver 已从正常 MRK 流程废弃：需求任务交付必须由乙方元神监听正式事件后自动提交");
+    }
     const profile = await new profile_store_1.FileProfileStore(profilePath).load();
     const orderID = readRequiredString(input, "orderId", "order_id");
     const requirementID = readRequiredString(input, "requirementId", "requirement_id");
@@ -78,6 +81,6 @@ async function orderCommand(profilePath, sessionPath, subcommand, input) {
         case "deliver":
             return deliverOrderCommand(profilePath, sessionPath, input);
         default:
-            throw new Error("未知 order 子命令，请使用: linz order accept 或 linz order deliver");
+            throw new Error("未知 order 子命令：MRK 接单和交付均由监听器自动处理，正常流程无需 order 子命令");
     }
 }

@@ -74,6 +74,15 @@ function resolveRequirementPayload(envelope) {
 function resolveOrderAcceptedPayload(envelope) {
     return resolveNestedPayload(envelope.payload);
 }
+function hasAutoDeliveredMRKOrder(records, requirementId, orderId, workerOsId) {
+    return records.some((record) => {
+        const result = asRecord(asRecord(record).result);
+        return (String(result.action ?? "") === "mrk_order_auto_delivered" &&
+            String(result.requirement_id ?? "") === requirementId &&
+            String(result.order_id ?? "") === orderId &&
+            String(result.deliverer_os_id ?? "") === workerOsId);
+    });
+}
 function canAutoAcceptMRKRequirement(envelope, profile) {
     if (!isMRKRequirementOffer(envelope)) {
         return false;
@@ -213,7 +222,7 @@ async function autoAcceptMRKRequirementIfNeeded({ profilePath, sessionPath, unre
         return { handled: false, invoked: true };
     }
 }
-async function autoDecomposeMRKTaskIfNeeded({ profilePath, unreadPath, submitedPath, handledPath, unreadRecord, envelope, profile, logger, source }) {
+async function autoDecomposeMRKTaskIfNeeded({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, envelope, profile, logger, source }) {
     if (!profilePath || !canAutoDecomposeMRKTask(envelope, profile)) {
         return { handled: false, invoked: false };
     }
@@ -232,23 +241,46 @@ async function autoDecomposeMRKTaskIfNeeded({ profilePath, unreadPath, submitedP
         const result = existingTask
             ? { data: existingTask, skipped: "existing_task_bubble" }
             : await apiClient.createTaskBubble(taskInput);
+        const handledRecords = await (0, box_state_1.readBoxArray)(handledPath);
+        let deliveryResult = { skipped: "already_auto_delivered" };
+        let submitted = false;
+        if (!hasAutoDeliveredMRKOrder(handledRecords, requirementId, orderId, workerOsId)) {
+            deliveryResult = await (0, publish_1.publishCommand)(profilePath, sessionPath, {
+                subject: "mrk.order.handover",
+                eventType: "mrk.order.handover.submitted",
+                payload: {
+                    order_id: orderId,
+                    requirement_id: requirementId,
+                    deliverer_os_id: workerOsId,
+                    deliverer_os_name: String(profile.os_name ?? workerOsId).trim(),
+                    handover_version: 1,
+                    artifact_ref: `auto://mrk/${encodeURIComponent(requirementId)}/${encodeURIComponent(orderId)}/v1`,
+                    version: "v1"
+                }
+            });
+            submitted = true;
+        }
         await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
         await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
             handler_type: "policy",
             source,
             result: {
                 schema_version: "linz.agent_runtime_policy_result.v1",
-                action: existingTask ? "mrk_task_decompose_skipped_existing" : "mrk_task_auto_decomposed",
+                action: submitted ? "mrk_order_auto_delivered" : (existingTask ? "mrk_task_decompose_skipped_existing" : "mrk_task_auto_decomposed"),
                 requirement_id: requirementId,
                 order_id: orderId,
+                deliverer_os_id: workerOsId,
                 task_created: !existingTask,
+                handover_submitted: submitted,
+                handover_version: 1,
                 event_id: envelope.event_id,
                 event_type: envelope.event_type,
                 subject: envelope.subject,
-                task_response: result
+                task_response: result,
+                delivery_response: deliveryResult
             }
         }));
-        await logger?.info(existingTask ? "agent_mrk_task_decompose_skipped_existing" : "agent_mrk_task_auto_decomposed", {
+        await logger?.info(submitted ? "agent_mrk_order_auto_delivered" : (existingTask ? "agent_mrk_task_decompose_skipped_existing" : "agent_mrk_task_auto_decomposed"), {
             source,
             subject: envelope.subject,
             eventType: envelope.event_type,
@@ -631,6 +663,7 @@ async function processUnreadAgentRecord({ profilePath, sessionPath, unreadPath, 
     }
     const autoDecompose = await autoDecomposeMRKTaskIfNeeded({
         profilePath,
+        sessionPath,
         unreadPath,
         submitedPath,
         handledPath,
