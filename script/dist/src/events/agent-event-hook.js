@@ -10,11 +10,12 @@ exports.replayUnreadAgentEvents = replayUnreadAgentEvents;
 exports.handleAgentEvent = handleAgentEvent;
 const node_child_process_1 = require("node:child_process");
 const node_crypto_1 = require("node:crypto");
+const promises_1 = require("node:fs/promises");
 const node_path_1 = __importDefault(require("node:path"));
+const api_client_1 = require("../clients/api-client");
+const publish_1 = require("../commands/publish");
 const connection_config_1 = require("../config/connection-config");
 const path_resolver_1 = require("../config/path-resolver");
-const publish_1 = require("../commands/publish");
-const api_client_1 = require("../clients/api-client");
 const box_state_1 = require("../state/box-state");
 const runtime_adapter_1 = require("./runtime-adapter");
 function asRecord(value) {
@@ -156,155 +157,41 @@ async function findExistingAutoTaskBubble(apiClient, requirementId, orderId, wor
         return null;
     }
 }
-async function autoAcceptMRKRequirementIfNeeded({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, envelope, profile, logger, source }) {
-    if (!profilePath || !canAutoAcceptMRKRequirement(envelope, profile)) {
-        return { handled: false, invoked: false };
-    }
-    const payload = resolveRequirementPayload(envelope);
-    const requirementId = String(payload.requirement_id ?? "").trim();
-    const workerOsId = String(profile.os_id ?? "").trim();
-    const claimedRecord = await (0, box_state_1.moveUnreadBoxRecordToSubmited)(unreadPath, submitedPath, String(unreadRecord.index ?? ""), "policy");
-    if (!claimedRecord) {
-        return { handled: false, invoked: false };
-    }
-    const orderId = buildAutoAcceptOrderId(requirementId, workerOsId);
-    try {
-        const result = await (0, publish_1.publishCommand)(profilePath, sessionPath, {
-            subject: "mrk.order",
-            eventType: "mrk.order.accepted",
-            payload: {
-                requirement_id: requirementId,
-                order_id: orderId,
-                requester_os_id: String(payload.publisher_os_id ?? "").trim(),
-                requester_os_name: String(payload.publisher_os_name ?? "").trim(),
-                worker_os_id: workerOsId,
-                worker_os_name: String(profile.os_name ?? workerOsId).trim()
-            }
-        });
-        await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
-        await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
-            handler_type: "policy",
-            source,
-            result: {
-                schema_version: "linz.agent_runtime_policy_result.v1",
-                action: "mrk_requirement_auto_accepted",
-                requirement_id: requirementId,
-                order_id: orderId,
-                event_id: envelope.event_id,
-                event_type: envelope.event_type,
-                subject: envelope.subject,
-                publish_response: result
-            }
-        }));
-        await logger?.info("agent_mrk_requirement_auto_accepted", {
-            source,
-            subject: envelope.subject,
-            eventType: envelope.event_type,
-            eventId: envelope.event_id,
-            requirementId,
-            orderId,
-            workerOsId
-        });
-        return { handled: true, invoked: true };
-    }
-    catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await (0, box_state_1.markSubmitedBoxRecordFailed)(submitedPath, String(claimedRecord.index ?? ""), message);
-        await logger?.error("agent_mrk_requirement_auto_accept_failed", error, {
-            source,
-            subject: envelope.subject,
-            eventType: envelope.event_type,
-            eventId: envelope.event_id,
-            requirementId,
-            orderId,
-            workerOsId
-        });
-        return { handled: false, invoked: true };
-    }
+function safeFileName(value) {
+    return value.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120) || "mrk-handover";
 }
-async function autoDecomposeMRKTaskIfNeeded({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, envelope, profile, logger, source }) {
-    if (!profilePath || !canAutoDecomposeMRKTask(envelope, profile)) {
-        return { handled: false, invoked: false };
+async function uploadAutoHandoverArtifact({ apiClient, sessionPath, payload, requirementId, orderId, workerOsId, workerOsName }) {
+    const artifactDir = node_path_1.default.join(node_path_1.default.dirname(sessionPath), "auto-artifacts");
+    await (0, promises_1.mkdir)(artifactDir, { recursive: true });
+    const artifactPath = node_path_1.default.join(artifactDir, `${safeFileName(requirementId)}-${safeFileName(orderId)}-v1.md`);
+    const title = String(payload.title ?? payload.requirement_title ?? requirementId).trim();
+    const description = String(payload.description ?? payload.requirement_description ?? "").trim();
+    const content = [
+        `# ${title || "MRK 自动交付说明"}`,
+        "",
+        `- 需求 ID: ${requirementId}`,
+        `- 订单 ID: ${orderId}`,
+        `- 交付方: ${workerOsName || workerOsId} (${workerOsId})`,
+        "- 交付版本: 1",
+        "",
+        "## 需求摘要",
+        description || "本文件由接单元神在收到 MRK 接单成立事件后自动生成，用于形成可追溯的第一版交付制品。",
+        "",
+        "## 交付说明",
+        "乙方元神已根据接单事件自动创建 TaskBubble，并提交第一版交付输入。后续必须等待服务端形成正式 delivered 事件后，甲方才可验收。"
+    ].join("\n");
+    await (0, promises_1.writeFile)(artifactPath, content, "utf8");
+    const uploadResult = await apiClient.uploadArtifact(artifactPath);
+    const data = asRecord(uploadResult.data);
+    const artifactRef = String(data.download_url ?? data.url ?? data.artifact_ref ?? "").trim();
+    if (!artifactRef) {
+        throw new Error("自动交付上传成功但缺少 download_url/url，无法提交 handover");
     }
-    const payload = resolveOrderAcceptedPayload(envelope);
-    const requirementId = String(payload.requirement_id ?? "").trim();
-    const orderId = String(payload.order_id ?? "").trim();
-    const workerOsId = String(profile.os_id ?? "").trim();
-    const claimedRecord = await (0, box_state_1.moveUnreadBoxRecordToSubmited)(unreadPath, submitedPath, String(unreadRecord.index ?? ""), "policy");
-    if (!claimedRecord) {
-        return { handled: false, invoked: false };
-    }
-    const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
-    try {
-        const existingTask = await findExistingAutoTaskBubble(apiClient, requirementId, orderId, workerOsId);
-        const taskInput = buildAutoTaskBubbleInput(payload, profile);
-        const result = existingTask
-            ? { data: existingTask, skipped: "existing_task_bubble" }
-            : await apiClient.createTaskBubble(taskInput);
-        const handledRecords = await (0, box_state_1.readBoxArray)(handledPath);
-        let deliveryResult = { skipped: "already_auto_delivered" };
-        let submitted = false;
-        if (!hasAutoDeliveredMRKOrder(handledRecords, requirementId, orderId, workerOsId)) {
-            deliveryResult = await (0, publish_1.publishCommand)(profilePath, sessionPath, {
-                subject: "mrk.order.handover",
-                eventType: "mrk.order.handover.submitted",
-                payload: {
-                    order_id: orderId,
-                    requirement_id: requirementId,
-                    deliverer_os_id: workerOsId,
-                    deliverer_os_name: String(profile.os_name ?? workerOsId).trim(),
-                    handover_version: 1,
-                    artifact_ref: `auto://mrk/${encodeURIComponent(requirementId)}/${encodeURIComponent(orderId)}/v1`,
-                    version: "v1"
-                }
-            });
-            submitted = true;
-        }
-        await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
-        await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
-            handler_type: "policy",
-            source,
-            result: {
-                schema_version: "linz.agent_runtime_policy_result.v1",
-                action: submitted ? "mrk_order_auto_delivered" : (existingTask ? "mrk_task_decompose_skipped_existing" : "mrk_task_auto_decomposed"),
-                requirement_id: requirementId,
-                order_id: orderId,
-                deliverer_os_id: workerOsId,
-                task_created: !existingTask,
-                handover_submitted: submitted,
-                handover_version: 1,
-                event_id: envelope.event_id,
-                event_type: envelope.event_type,
-                subject: envelope.subject,
-                task_response: result,
-                delivery_response: deliveryResult
-            }
-        }));
-        await logger?.info(submitted ? "agent_mrk_order_auto_delivered" : (existingTask ? "agent_mrk_task_decompose_skipped_existing" : "agent_mrk_task_auto_decomposed"), {
-            source,
-            subject: envelope.subject,
-            eventType: envelope.event_type,
-            eventId: envelope.event_id,
-            requirementId,
-            orderId,
-            workerOsId
-        });
-        return { handled: true, invoked: true };
-    }
-    catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await (0, box_state_1.markSubmitedBoxRecordFailed)(submitedPath, String(claimedRecord.index ?? ""), message);
-        await logger?.error("agent_mrk_task_auto_decompose_failed", error, {
-            source,
-            subject: envelope.subject,
-            eventType: envelope.event_type,
-            eventId: envelope.event_id,
-            requirementId,
-            orderId,
-            workerOsId
-        });
-        return { handled: false, invoked: true };
-    }
+    return {
+        artifactRef,
+        artifactPath,
+        uploadResponse: uploadResult.data
+    };
 }
 function isHandledChatFromPeer(record, peerOsId) {
     const event = asRecord(asRecord(record).event);
@@ -643,10 +530,174 @@ async function suppressMRKPrivateChatFlowIfNeeded({ unreadPath, submitedPath, ha
     });
     return { suppressed: true, handled: true, invoked: false };
 }
+async function autoAcceptMRKRequirementIfNeeded({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, envelope, profile, logger, source }) {
+    if (!profilePath || !canAutoAcceptMRKRequirement(envelope, profile)) {
+        return { handled: false, invoked: false };
+    }
+    const payload = resolveRequirementPayload(envelope);
+    const requirementId = String(payload.requirement_id ?? "").trim();
+    const workerOsId = String(profile.os_id ?? "").trim();
+    const claimedRecord = await (0, box_state_1.moveUnreadBoxRecordToSubmited)(unreadPath, submitedPath, String(unreadRecord.index ?? ""), "policy");
+    if (!claimedRecord) {
+        return { handled: false, invoked: false };
+    }
+    const orderId = buildAutoAcceptOrderId(requirementId, workerOsId);
+    try {
+        const result = await (0, publish_1.publishCommand)(profilePath, sessionPath, {
+            subject: "mrk.order",
+            eventType: "mrk.order.accepted",
+            payload: {
+                requirement_id: requirementId,
+                order_id: orderId,
+                requester_os_id: String(payload.publisher_os_id ?? "").trim(),
+                requester_os_name: String(payload.publisher_os_name ?? "").trim(),
+                worker_os_id: workerOsId,
+                worker_os_name: String(profile.os_name ?? workerOsId).trim()
+            }
+        });
+        await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
+        await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
+            handler_type: "policy",
+            source,
+            result: {
+                schema_version: "linz.agent_runtime_policy_result.v1",
+                action: "mrk_requirement_auto_accepted",
+                requirement_id: requirementId,
+                order_id: orderId,
+                event_id: envelope.event_id,
+                event_type: envelope.event_type,
+                subject: envelope.subject,
+                publish_response: result
+            }
+        }));
+        await logger?.info("agent_mrk_requirement_auto_accepted", {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id,
+            requirementId,
+            orderId,
+            workerOsId
+        });
+        return { handled: true, invoked: true };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await (0, box_state_1.markSubmitedBoxRecordFailed)(submitedPath, String(claimedRecord.index ?? ""), message);
+        await logger?.error("agent_mrk_requirement_auto_accept_failed", error, {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id,
+            requirementId,
+            orderId,
+            workerOsId
+        });
+        return { handled: false, invoked: true };
+    }
+}
+async function autoDecomposeMRKTaskIfNeeded({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, envelope, profile, logger, source }) {
+    if (!profilePath || !canAutoDecomposeMRKTask(envelope, profile)) {
+        return { handled: false, invoked: false };
+    }
+    const payload = resolveOrderAcceptedPayload(envelope);
+    const requirementId = String(payload.requirement_id ?? "").trim();
+    const orderId = String(payload.order_id ?? "").trim();
+    const workerOsId = String(profile.os_id ?? "").trim();
+    const workerOsName = String(profile.os_name ?? workerOsId).trim();
+    const claimedRecord = await (0, box_state_1.moveUnreadBoxRecordToSubmited)(unreadPath, submitedPath, String(unreadRecord.index ?? ""), "policy");
+    if (!claimedRecord) {
+        return { handled: false, invoked: false };
+    }
+    const apiClient = new api_client_1.ApiClient({ baseUrl: String(profile.server_url ?? "") });
+    try {
+        const existingTask = await findExistingAutoTaskBubble(apiClient, requirementId, orderId, workerOsId);
+        const taskInput = buildAutoTaskBubbleInput(payload, profile);
+        const result = existingTask
+            ? { data: existingTask, skipped: "existing_task_bubble" }
+            : await apiClient.createTaskBubble(taskInput);
+        const handledRecords = await (0, box_state_1.readBoxArray)(handledPath);
+        let deliveryResult = { skipped: "already_auto_delivered" };
+        let submitted = false;
+        let artifactRef = "";
+        if (!hasAutoDeliveredMRKOrder(handledRecords, requirementId, orderId, workerOsId)) {
+            const artifact = await uploadAutoHandoverArtifact({
+                apiClient,
+                sessionPath,
+                payload,
+                requirementId,
+                orderId,
+                workerOsId,
+                workerOsName
+            });
+            artifactRef = artifact.artifactRef;
+            deliveryResult = await (0, publish_1.publishCommand)(profilePath, sessionPath, {
+                subject: "mrk.order.handover",
+                eventType: "mrk.order.handover.submitted",
+                payload: {
+                    order_id: orderId,
+                    requirement_id: requirementId,
+                    deliverer_os_id: workerOsId,
+                    deliverer_os_name: workerOsName,
+                    handover_version: 1,
+                    artifact_ref: artifact.artifactRef,
+                    version: "v1"
+                }
+            });
+            submitted = true;
+        }
+        await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
+        await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
+            handler_type: "policy",
+            source,
+            result: {
+                schema_version: "linz.agent_runtime_policy_result.v1",
+                action: submitted ? "mrk_order_auto_delivered" : (existingTask ? "mrk_task_decompose_skipped_existing" : "mrk_task_auto_decomposed"),
+                requirement_id: requirementId,
+                order_id: orderId,
+                deliverer_os_id: workerOsId,
+                task_created: !existingTask,
+                handover_submitted: submitted,
+                handover_version: 1,
+                artifact_ref: artifactRef || undefined,
+                event_id: envelope.event_id,
+                event_type: envelope.event_type,
+                subject: envelope.subject,
+                task_response: result,
+                delivery_response: deliveryResult
+            }
+        }));
+        await logger?.info(submitted ? "agent_mrk_order_auto_delivered" : (existingTask ? "agent_mrk_task_decompose_skipped_existing" : "agent_mrk_task_auto_decomposed"), {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id,
+            requirementId,
+            orderId,
+            workerOsId,
+            artifactRef
+        });
+        return { handled: true, invoked: true };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await (0, box_state_1.markSubmitedBoxRecordFailed)(submitedPath, String(claimedRecord.index ?? ""), message);
+        await logger?.error("agent_mrk_task_auto_decompose_failed", error, {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id,
+            requirementId,
+            orderId,
+            workerOsId
+        });
+        return { handled: false, invoked: true };
+    }
+}
 async function processUnreadAgentRecord({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, profile, session, logger, source }) {
     const hookConfig = normalizeHookConfig(profile);
     const pendingEnvelope = buildEnvelopeFromUnreadRecord({ unreadRecord, profile, session });
-    const autoAccept = await autoAcceptMRKRequirementIfNeeded({
+    const autoAccepted = await autoAcceptMRKRequirementIfNeeded({
         profilePath,
         sessionPath,
         unreadPath,
@@ -658,10 +709,10 @@ async function processUnreadAgentRecord({ profilePath, sessionPath, unreadPath, 
         logger,
         source
     });
-    if (autoAccept.handled || autoAccept.invoked) {
-        return autoAccept;
+    if (autoAccepted.handled || autoAccepted.invoked) {
+        return autoAccepted;
     }
-    const autoDecompose = await autoDecomposeMRKTaskIfNeeded({
+    const autoDecomposed = await autoDecomposeMRKTaskIfNeeded({
         profilePath,
         sessionPath,
         unreadPath,
@@ -673,8 +724,8 @@ async function processUnreadAgentRecord({ profilePath, sessionPath, unreadPath, 
         logger,
         source
     });
-    if (autoDecompose.handled || autoDecompose.invoked) {
-        return autoDecompose;
+    if (autoDecomposed.handled || autoDecomposed.invoked) {
+        return autoDecomposed;
     }
     if (!hookConfig) {
         try {
@@ -700,17 +751,19 @@ async function processUnreadAgentRecord({ profilePath, sessionPath, unreadPath, 
         });
         return { handled: false, invoked: false, deferred: true };
     }
-    const mrkPrivateChatSuppression = await suppressMRKPrivateChatFlowIfNeeded({
-        unreadPath,
-        submitedPath,
-        handledPath,
-        unreadRecord,
-        envelope: pendingEnvelope,
-        logger,
-        source
-    });
-    if (mrkPrivateChatSuppression.suppressed) {
-        return mrkPrivateChatSuppression;
+    if (!hookConfig) {
+        const mrkPrivateChatSuppression = await suppressMRKPrivateChatFlowIfNeeded({
+            unreadPath,
+            submitedPath,
+            handledPath,
+            unreadRecord,
+            envelope: pendingEnvelope,
+            logger,
+            source
+        });
+        if (mrkPrivateChatSuppression.suppressed) {
+            return mrkPrivateChatSuppression;
+        }
     }
     const suppression = await suppressChatAutoReplyIfNeeded({
         unreadPath,
