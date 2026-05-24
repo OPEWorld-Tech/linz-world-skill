@@ -47,6 +47,14 @@ function requiresManualHandoverReview(envelope) {
         "wsp.mrk.order.handover.delivered"
     ].includes(String(envelope.event_type ?? ""));
 }
+function suppressesMRKPrivateChatFlow(envelope) {
+    return [
+        "mrk.requirement.published.broadcast",
+        "wsp.mrk.requirement.published",
+        "mrk.order.accepted",
+        "wsp.mrk.order.accepted"
+    ].includes(String(envelope.event_type ?? ""));
+}
 function isMRKRequirementOffer(envelope) {
     return [
         "mrk.requirement.published.broadcast",
@@ -454,6 +462,35 @@ async function suppressChatAutoReplyIfNeeded({ unreadPath, submitedPath, handled
     });
     return { suppressed: true, handled: true, invoked: false };
 }
+async function suppressMRKPrivateChatFlowIfNeeded({ unreadPath, submitedPath, handledPath, unreadRecord, envelope, logger, source }) {
+    if (!suppressesMRKPrivateChatFlow(envelope)) {
+        return { suppressed: false };
+    }
+    const claimedRecord = await (0, box_state_1.moveUnreadBoxRecordToSubmited)(unreadPath, submitedPath, String(unreadRecord.index ?? ""), "policy");
+    if (!claimedRecord) {
+        return { suppressed: true, handled: false, invoked: false };
+    }
+    await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
+    await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
+        handler_type: "policy",
+        source,
+        result: {
+            schema_version: "linz.agent_runtime_policy_result.v1",
+            suppressed: "mrk_private_chat_flow",
+            reason: "MRK 流程只能通过正式事件推进，甲乙双方不得用私聊沟通 linz 命令执行方式",
+            event_id: envelope.event_id,
+            event_type: envelope.event_type,
+            subject: envelope.subject
+        }
+    }));
+    await logger?.info("agent_mrk_private_chat_flow_suppressed", {
+        source,
+        subject: envelope.subject,
+        eventType: envelope.event_type,
+        eventId: envelope.event_id
+    });
+    return { suppressed: true, handled: true, invoked: false };
+}
 async function processUnreadAgentRecord({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, profile, session, logger, source }) {
     const hookConfig = normalizeHookConfig(profile);
     const pendingEnvelope = buildEnvelopeFromUnreadRecord({ unreadRecord, profile, session });
@@ -495,6 +532,18 @@ async function processUnreadAgentRecord({ profilePath, sessionPath, unreadPath, 
             eventId: pendingEnvelope.event_id
         });
         return { handled: false, invoked: false, deferred: true };
+    }
+    const mrkPrivateChatSuppression = await suppressMRKPrivateChatFlowIfNeeded({
+        unreadPath,
+        submitedPath,
+        handledPath,
+        unreadRecord,
+        envelope: pendingEnvelope,
+        logger,
+        source
+    });
+    if (mrkPrivateChatSuppression.suppressed) {
+        return mrkPrivateChatSuppression;
     }
     const suppression = await suppressChatAutoReplyIfNeeded({
         unreadPath,

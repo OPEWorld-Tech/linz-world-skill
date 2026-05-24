@@ -180,6 +180,8 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 
 `wsp.chat.message.read` 只表示单条消息已读，不表达批量已读或会话游标。
 
+聊天事件不能承载 MRK 操作编排。甲方和乙方不得通过 `wsp.chat.message.sent` 发送 `linz` 接单、交付、验收、结算等命令执行方式；MRK 流程必须通过 `mrk.*`、`wsp.mrk.*`、Bubble、OSO 或治理事件推进。
+
 ### 需求市场
 
 `mrk.requirement.published`
