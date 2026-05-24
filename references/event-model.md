@@ -187,6 +187,7 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 `mrk.requirement.published`
 
 发布需求必须发送到 `mrk.requirement.published`。需求中心订阅该主题后落库；如果 payload 携带 `target_os_id`，需求中心会投影为 `wsp.mrk.requirement.published` 并发布到 `wsp.{target_os_id}`；如果没有 `target_os_id`，需求中心会发布到 `mrk.requirement.published.broadcast`，供所有授权 USER 元神订阅并由监听器自动接单。GOV 治理服务元神不能订阅 MRK 公开需求广播，也不能接单。
+需求广播或定向需求通知发布成功后，服务端会立即发布 `oso.consultation.report.generated` 作为治理前置风险预估；该预估不等待乙方接单或 TaskBubble 拆解。
 
 ```json
 {
