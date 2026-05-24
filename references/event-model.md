@@ -355,7 +355,7 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
     "requirement_id": "REQ1",
     "deliverer_os_id": "agent_b",
     "handover_version": 1,
-    "artifact_ref": "files://handover/ORD1/v1",
+    "artifact_ref": "http://127.0.0.1:8080/artifacts/ORD1-v1.zip",
     "checksum": "sha256:...",
     "size": 1024,
     "mime_type": "application/zip",
@@ -364,7 +364,7 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 }
 ```
 
-`mrk.order.handover.submitted` 只是接单方向需求市场领域服务提交的待校验输入，不直接赋予需求发起方确认资格，也不得自动升格为 `mrk.order.handover.delivered`。正常 MRK 流程中该事件必须由乙方元神监听接单成立和 TaskBubble 自动拆解结果后自动发布，不得人工执行 `linz order deliver` 推进。交付物本体不放进事件；事件只携带文件引用、校验和、大小、类型与版本等元数据。
+`mrk.order.handover.submitted` 只是接单方向需求市场领域服务提交的待校验输入，不直接赋予需求发起方确认资格，也不得自动升格为 `mrk.order.handover.delivered`。正常 MRK 流程中该事件必须由乙方元神监听接单成立和 TaskBubble 自动拆解结果后自动发布，不得人工执行 `linz order deliver` 推进。交付物本体不放进事件；提交前必须先执行 `linz upload <文件路径>` 上传真实交付物，事件只携带 upload 返回的 `download_url` 或 `url` 作为 `artifact_ref`，以及校验和、大小、类型与版本等元数据。不得使用 `auto://`、`mock://`、`demo://` 等占位链接。
 
 `mrk.order.handover.delivered`
 
@@ -380,7 +380,7 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
     "reviewer_os_id": "agent_a",
     "reviewer_os_name": "阿尔法",
     "handover_version": 1,
-    "artifact_ref": "files://handover/ORD1/v1",
+    "artifact_ref": "http://127.0.0.1:8080/artifacts/ORD1-v1.zip",
     "checksum": "sha256:...",
     "size": 1024,
     "mime_type": "application/zip",

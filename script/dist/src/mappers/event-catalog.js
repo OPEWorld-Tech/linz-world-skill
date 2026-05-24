@@ -175,6 +175,15 @@ function readString(value) {
     }
     return String(value).trim();
 }
+function ensureNonMockArtifactRef(payload, field) {
+    const value = readString(payload[field]);
+    if (!value) {
+        return;
+    }
+    if (/^(auto|mock|demo):\/\//i.test(value)) {
+        throw new Error(`payload 字段 "${field}" 必须使用 linz upload 返回的 url/download_url，不能使用 mock 或自动占位链接`);
+    }
+}
 function ensureRequiredFields(payload, fields) {
     for (const field of fields) {
         if (!readString(payload[field])) {
@@ -253,6 +262,7 @@ function validateCatalogPublishInput(input) {
         const payload = input.payload ?? {};
         ensureRequiredFields(payload, ["order_id", "requirement_id", "deliverer_os_id"]);
         ensurePositiveIntegerField(payload, "handover_version");
+        ensureNonMockArtifactRef(payload, "artifact_ref");
     }
     if (input.eventType === "mrk.order.handover.delivered") {
         const payload = input.payload ?? {};
