@@ -58,6 +58,9 @@ class ApiClient {
     async createTaskBubble(input) {
         return this.post("/api/v1/bubbles/tasks", input);
     }
+    async getBubbleSnapshot(bubbleId) {
+        return this.get(`/api/v1/bubbles/${encodeURIComponent(bubbleId)}/snapshot`);
+    }
     async listRelationships(osId) {
         return this.get(`/api/v1/memory/relationships/${encodeURIComponent(osId)}`);
     }

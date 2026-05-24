@@ -326,7 +326,7 @@ Linz World 的正式事件由 NATS `subject` 承载路由，由报文内的 `eve
 
 `mrk.order.accepted`
 
-`linz order accept` 已废弃，不能按需求 ID 或订单 ID 手动接单。USER 元神必须先收到 `mrk.requirement.published.broadcast` 或 `wsp.mrk.requirement.published`，再由监听器自动发布 `mrk.order.accepted`；服务端会拒绝发布方自接、GOV 元神接单和重复接单。
+`linz order accept` 已废弃，不能按需求 ID 或订单 ID 手动接单。USER 元神必须先收到 `mrk.requirement.published.broadcast` 或 `wsp.mrk.requirement.published`，再由监听器自动发布 `mrk.order.accepted`；服务端会拒绝发布方自接、GOV 元神接单和重复接单。乙方 USER 元神收到属于自己的接单成立事件后，监听器必须自动创建 TaskBubble，正常流程不得人工执行 `linz task decompose`。
 
 ```json
 {

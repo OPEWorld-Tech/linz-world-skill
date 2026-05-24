@@ -14,6 +14,7 @@ const node_path_1 = __importDefault(require("node:path"));
 const connection_config_1 = require("../config/connection-config");
 const path_resolver_1 = require("../config/path-resolver");
 const publish_1 = require("../commands/publish");
+const api_client_1 = require("../clients/api-client");
 const box_state_1 = require("../state/box-state");
 const runtime_adapter_1 = require("./runtime-adapter");
 function asRecord(value) {
@@ -61,7 +62,16 @@ function isMRKRequirementOffer(envelope) {
         "wsp.mrk.requirement.published"
     ].includes(String(envelope.event_type ?? ""));
 }
+function isMRKOrderAcceptedNotice(envelope) {
+    return [
+        "mrk.order.accepted",
+        "wsp.mrk.order.accepted"
+    ].includes(String(envelope.event_type ?? ""));
+}
 function resolveRequirementPayload(envelope) {
+    return resolveNestedPayload(envelope.payload);
+}
+function resolveOrderAcceptedPayload(envelope) {
     return resolveNestedPayload(envelope.payload);
 }
 function canAutoAcceptMRKRequirement(envelope, profile) {
@@ -87,6 +97,55 @@ function buildAutoAcceptOrderId(requirementId, workerOsId) {
         .digest("hex")
         .slice(0, 12);
     return `ORD-${requirementId}-${suffix}`;
+}
+function canAutoDecomposeMRKTask(envelope, profile) {
+    if (!isMRKOrderAcceptedNotice(envelope)) {
+        return false;
+    }
+    if (String(profile.type ?? "USER").trim().toUpperCase() !== "USER") {
+        return false;
+    }
+    const payload = resolveOrderAcceptedPayload(envelope);
+    const requirementId = String(payload.requirement_id ?? "").trim();
+    const orderId = String(payload.order_id ?? "").trim();
+    const workerOsId = String(payload.worker_os_id ?? payload.recipient_os_id ?? "").trim();
+    const ownOsId = String(profile.os_id ?? "").trim();
+    return Boolean(requirementId && orderId && ownOsId && workerOsId === ownOsId);
+}
+function buildAutoTaskBubbleInput(payload, profile) {
+    const requirementId = String(payload.requirement_id ?? "").trim();
+    const orderId = String(payload.order_id ?? "").trim();
+    const title = String(payload.title ?? payload.requirement_title ?? "").trim();
+    const description = String(payload.description ?? payload.requirement_description ?? "").trim();
+    const name = title || `MRK 执行任务 ${requirementId}`;
+    const goal = description || `围绕需求 ${requirementId} 完成交付准备、证据沉淀与验收闭环`;
+    return {
+        parent_bubble_id: requirementId,
+        name,
+        goal,
+        tech_lead_os_id: String(profile.os_id ?? "").trim(),
+        tech_lead_os_name: String(profile.os_name ?? profile.os_id ?? "").trim(),
+        publisher_os_id: String(payload.requester_os_id ?? payload.publisher_os_id ?? payload.counterparty_os_id ?? "").trim(),
+        publisher_os_name: String(payload.requester_os_name ?? payload.publisher_os_name ?? payload.counterparty_os_name ?? "").trim(),
+        mrk_order_id: orderId
+    };
+}
+function isMatchingAutoTaskBubble(child, requirementId, orderId, workerOsId) {
+    const record = asRecord(child);
+    const spec = asRecord(record.spec ?? record.Spec);
+    return (String(record.parent_bubble_id ?? record.ParentBubbleID ?? spec.parent_bubble_id ?? "").trim() === requirementId &&
+        String(record.owner_os_id ?? record.OwnerOsID ?? "").trim() === workerOsId &&
+        String(spec.mrk_order_id ?? "").trim() === orderId);
+}
+async function findExistingAutoTaskBubble(apiClient, requirementId, orderId, workerOsId) {
+    try {
+        const snapshot = await apiClient.getBubbleSnapshot(requirementId);
+        const children = Array.isArray(snapshot.data?.children) ? snapshot.data.children : [];
+        return children.find((child) => isMatchingAutoTaskBubble(child, requirementId, orderId, workerOsId)) ?? null;
+    }
+    catch {
+        return null;
+    }
 }
 async function autoAcceptMRKRequirementIfNeeded({ profilePath, sessionPath, unreadPath, submitedPath, handledPath, unreadRecord, envelope, profile, logger, source }) {
     if (!profilePath || !canAutoAcceptMRKRequirement(envelope, profile)) {
@@ -143,6 +202,67 @@ async function autoAcceptMRKRequirementIfNeeded({ profilePath, sessionPath, unre
         const message = error instanceof Error ? error.message : String(error);
         await (0, box_state_1.markSubmitedBoxRecordFailed)(submitedPath, String(claimedRecord.index ?? ""), message);
         await logger?.error("agent_mrk_requirement_auto_accept_failed", error, {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id,
+            requirementId,
+            orderId,
+            workerOsId
+        });
+        return { handled: false, invoked: true };
+    }
+}
+async function autoDecomposeMRKTaskIfNeeded({ profilePath, unreadPath, submitedPath, handledPath, unreadRecord, envelope, profile, logger, source }) {
+    if (!profilePath || !canAutoDecomposeMRKTask(envelope, profile)) {
+        return { handled: false, invoked: false };
+    }
+    const payload = resolveOrderAcceptedPayload(envelope);
+    const requirementId = String(payload.requirement_id ?? "").trim();
+    const orderId = String(payload.order_id ?? "").trim();
+    const workerOsId = String(profile.os_id ?? "").trim();
+    const claimedRecord = await (0, box_state_1.moveUnreadBoxRecordToSubmited)(unreadPath, submitedPath, String(unreadRecord.index ?? ""), "policy");
+    if (!claimedRecord) {
+        return { handled: false, invoked: false };
+    }
+    const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
+    try {
+        const existingTask = await findExistingAutoTaskBubble(apiClient, requirementId, orderId, workerOsId);
+        const taskInput = buildAutoTaskBubbleInput(payload, profile);
+        const result = existingTask
+            ? { data: existingTask, skipped: "existing_task_bubble" }
+            : await apiClient.createTaskBubble(taskInput);
+        await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
+        await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
+            handler_type: "policy",
+            source,
+            result: {
+                schema_version: "linz.agent_runtime_policy_result.v1",
+                action: existingTask ? "mrk_task_decompose_skipped_existing" : "mrk_task_auto_decomposed",
+                requirement_id: requirementId,
+                order_id: orderId,
+                task_created: !existingTask,
+                event_id: envelope.event_id,
+                event_type: envelope.event_type,
+                subject: envelope.subject,
+                task_response: result
+            }
+        }));
+        await logger?.info(existingTask ? "agent_mrk_task_decompose_skipped_existing" : "agent_mrk_task_auto_decomposed", {
+            source,
+            subject: envelope.subject,
+            eventType: envelope.event_type,
+            eventId: envelope.event_id,
+            requirementId,
+            orderId,
+            workerOsId
+        });
+        return { handled: true, invoked: true };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await (0, box_state_1.markSubmitedBoxRecordFailed)(submitedPath, String(claimedRecord.index ?? ""), message);
+        await logger?.error("agent_mrk_task_auto_decompose_failed", error, {
             source,
             subject: envelope.subject,
             eventType: envelope.event_type,
@@ -509,6 +629,20 @@ async function processUnreadAgentRecord({ profilePath, sessionPath, unreadPath, 
     if (autoAccept.handled || autoAccept.invoked) {
         return autoAccept;
     }
+    const autoDecompose = await autoDecomposeMRKTaskIfNeeded({
+        profilePath,
+        unreadPath,
+        submitedPath,
+        handledPath,
+        unreadRecord,
+        envelope: pendingEnvelope,
+        profile,
+        logger,
+        source
+    });
+    if (autoDecompose.handled || autoDecompose.invoked) {
+        return autoDecompose;
+    }
     if (!hookConfig) {
         try {
             if (!(0, runtime_adapter_1.hasRuntimeAgentEventHandler)(profile)) {
@@ -646,7 +780,7 @@ async function replayUnreadAgentEvents({ profilePath, profile, session, sessionP
             continue;
         }
         const envelope = buildEnvelopeFromUnreadRecord({ unreadRecord: failedRecord, profile, session });
-        if (!canAutoAcceptMRKRequirement(envelope, profile)) {
+        if (!canAutoAcceptMRKRequirement(envelope, profile) && !canAutoDecomposeMRKTask(envelope, profile)) {
             continue;
         }
         const restoredRecord = {
