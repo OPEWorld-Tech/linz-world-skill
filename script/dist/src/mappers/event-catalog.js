@@ -329,8 +329,8 @@ function validateCatalogPublishInput(input) {
             "approver_os_name",
             "agreement_status"
         ]);
-        if (String(payload.agreement_status).trim() !== "agreed") {
-            throw new Error("oso.consultation.report.agreed 的 agreement_status 必须为 agreed");
+        if (!["agreed", "rejected"].includes(String(payload.agreement_status).trim())) {
+            throw new Error("oso.consultation.report.agreed 的 agreement_status 必须为 agreed 或 rejected");
         }
     }
     if (input.eventType === "oso.recommendation.generated") {
