@@ -75,17 +75,6 @@ function ensurePublishSubjectAuthorized(session, subject) {
         throw new Error(`当前授权不允许发布到 subject: ${subject}`);
     }
 }
-function ensureChatDoesNotCarryMRKCommandFlow(input) {
-    if (input.eventType !== "wsp.chat.message.sent") {
-        return;
-    }
-    const content = String(input.payload?.content ?? "");
-    const mentionsLinzCommand = /(^|\s|`)(linz|script\/linz)(\s|`)/i.test(content);
-    const mentionsMRKFlow = /(MRK|接单|发单|交付|验收|结算|order|requirement|handover|acceptance|task decompose|dispute)/i.test(content);
-    if (mentionsLinzCommand && mentionsMRKFlow) {
-        throw new Error("MRK 流程不得通过甲乙私聊沟通 linz 命令执行方式，请使用正式 MRK/Bubble/治理事件推进");
-    }
-}
 async function publishCommand(profilePath, sessionPath, input) {
     (0, command_guards_1.ensurePublishInput)(input);
     const profile = await new profile_store_1.FileProfileStore(profilePath).load();
@@ -96,7 +85,6 @@ async function publishCommand(profilePath, sessionPath, input) {
     const existingSettlement = (0, settlement_state_1.getSettlementRecord)(settlementState, String(input.payload?.requirement_id ?? input.payload?.requirementId ?? ""));
     const resolvedPublish = (0, publish_dispatcher_1.resolvePublishInput)(withHeartbeatIdentity(withChatMessageNames(input, profile), profile), { existingSettlement });
     (0, event_catalog_1.validateCatalogPublishInput)(resolvedPublish.input);
-    ensureChatDoesNotCarryMRKCommandFlow(resolvedPublish.input);
     ensurePublishSubjectAuthorized(session, resolvedPublish.input.subject);
     const apiClient = new api_client_1.ApiClient({ baseUrl: profile.server_url });
     const response = await apiClient.publish(resolvedPublish.input);

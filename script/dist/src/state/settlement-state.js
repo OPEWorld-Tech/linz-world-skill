@@ -88,6 +88,11 @@ function normalizeSettlementRecord(record, fallbackProfileId) {
 function buildSettlementKey(record) {
     return readString(record.settlement_id, record.requirement_id, record.order_id, record.publish_business_transaction_id, record.reward_business_transaction_id);
 }
+function settlementIdentityMatches(left, right) {
+    return ((readString(left.requirement_id) && readString(left.requirement_id) === readString(right.requirement_id)) ||
+        (readString(left.order_id) && readString(left.order_id) === readString(right.order_id)) ||
+        (readString(left.settlement_id) && readString(left.settlement_id) === readString(right.settlement_id)));
+}
 function getSettlementRecord(state, requirementId) {
     const settlements = asRecord(state.settlements);
     const direct = settlements[String(requirementId)];
@@ -126,9 +131,7 @@ function upsertSettlementRecord(state, record) {
             if (!normalizedCandidate) {
                 continue;
             }
-            if (readString(normalizedCandidate.requirement_id) === readString(normalizedRecord.requirement_id) ||
-                readString(normalizedCandidate.order_id) === readString(normalizedRecord.order_id) ||
-                readString(normalizedCandidate.settlement_id) === readString(normalizedRecord.settlement_id)) {
+            if (settlementIdentityMatches(normalizedCandidate, normalizedRecord)) {
                 previousKey = candidateKey;
                 current = normalizedCandidate;
                 break;
@@ -171,6 +174,20 @@ function applySettlementEvent(state, subject, payload) {
     const transactionId = readString(data.business_transaction_id, data.businessTransactionId, data.reward_business_transaction_id, data.rewardBusinessTransactionId, data.transfer_transaction_id, data.transaction_id, data.transactionId);
     if (!eventType) {
         return state;
+    }
+    if (eventType === "mrk.order.accepted" || eventType === "wsp.mrk.order.accepted") {
+        const workerOsId = readString(data.worker_os_id, data.workerOsId, data.executor_os_id, data.executorOsId, data.deliverer_os_id, data.delivererOsId, data.payee_os_id, data.payeeOsId);
+        const existing = resolveExistingSettlement(state, requirement_id, order_id, settlement_id);
+        return upsertSettlementRecord(state, {
+            settlement_id,
+            requirement_id,
+            order_id,
+            executor_account_id: workerOsId || existing?.executor_account_id,
+            settlement_state: isTerminalSettlementState(existing?.settlement_state)
+                ? existing?.settlement_state
+                : "已接单",
+            updated_at: new Date().toISOString()
+        });
     }
     if (eventType === "ec.transfer.completed") {
         return upsertSettlementRecord(state, {

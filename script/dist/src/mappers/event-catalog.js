@@ -81,7 +81,7 @@ exports.EVENT_CATALOG = [
     { subject: "event.memory.sink", eventTypes: ["event.memory.sink.requested"] },
     {
         subject: "oso.consultation",
-        eventTypes: ["oso.consultation.requested", "oso.consultation.report.generated"]
+        eventTypes: ["oso.consultation.requested", "oso.consultation.report.generated", "oso.consultation.report.agreed"]
     },
     { subject: "oso.recommendation", eventTypes: ["oso.recommendation.generated"] },
     { subject: "oso.warning", eventTypes: ["oso.warning.raised"] },
@@ -318,6 +318,20 @@ function validateCatalogPublishInput(input) {
             "risk_level",
             "analysis_summary"
         ]);
+    }
+    if (input.eventType === "oso.consultation.report.agreed") {
+        const payload = input.payload ?? {};
+        ensureRequiredFields(payload, [
+            "requirement_id",
+            "order_id",
+            "report_id",
+            "approver_os_id",
+            "approver_os_name",
+            "agreement_status"
+        ]);
+        if (String(payload.agreement_status).trim() !== "agreed") {
+            throw new Error("oso.consultation.report.agreed 的 agreement_status 必须为 agreed");
+        }
     }
     if (input.eventType === "oso.recommendation.generated") {
         const payload = input.payload ?? {};
