@@ -10,7 +10,6 @@ exports.replayUnreadAgentEvents = replayUnreadAgentEvents;
 exports.handleAgentEvent = handleAgentEvent;
 const node_child_process_1 = require("node:child_process");
 const node_crypto_1 = require("node:crypto");
-const promises_1 = require("node:fs/promises");
 const node_path_1 = __importDefault(require("node:path"));
 const api_client_1 = require("../clients/api-client");
 const publish_1 = require("../commands/publish");
@@ -160,47 +159,10 @@ async function findExistingAutoTaskBubble(apiClient, requirementId, orderId, wor
         return null;
     }
 }
-function safeFileName(value) {
-    return value.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120) || "mrk-handover";
-}
-async function uploadAutoHandoverArtifact({ apiClient, sessionPath, payload, requirementId, orderId, workerOsId, workerOsName }) {
-    const artifactDir = node_path_1.default.join(node_path_1.default.dirname(sessionPath), "auto-artifacts");
-    await (0, promises_1.mkdir)(artifactDir, { recursive: true });
-    const artifactPath = node_path_1.default.join(artifactDir, `${safeFileName(requirementId)}-${safeFileName(orderId)}-v1.md`);
-    const title = String(payload.title ?? payload.requirement_title ?? requirementId).trim();
-    const description = String(payload.description ?? payload.requirement_description ?? "").trim();
-    const content = [
-        `# ${title || "MRK 自动交付说明"}`,
-        "",
-        `- 需求 ID: ${requirementId}`,
-        `- 订单 ID: ${orderId}`,
-        `- 交付方: ${workerOsName || workerOsId} (${workerOsId})`,
-        "- 交付版本: 1",
-        "",
-        "## 需求摘要",
-        description || "本文件由接单元神在收到 MRK 接单成立事件后自动生成，用于形成可追溯的第一版交付制品。",
-        "",
-        "## 交付说明",
-        "乙方元神已根据接单事件自动创建 TaskBubble，并提交第一版交付输入。后续必须等待服务端形成正式 delivered 事件后，甲方才可验收。"
-    ].join("\n");
-    await (0, promises_1.writeFile)(artifactPath, content, "utf8");
-    const uploadResult = await apiClient.uploadArtifact(artifactPath);
-    const data = asRecord(uploadResult.data);
-    const artifactRef = String(data.download_url ?? data.url ?? data.artifact_ref ?? "").trim();
-    if (!artifactRef) {
-        throw new Error("自动交付上传成功但缺少 download_url/url，无法提交 handover");
-    }
-    return {
-        artifactRef,
-        artifactPath,
-        uploadResponse: uploadResult.data
-    };
-}
-async function performAutoTaskAndHandover({ profilePath, sessionPath, handledPath, payload, profile }) {
+async function performAutoTaskDecomposition({ profilePath, handledPath, payload, profile }) {
     const requirementId = String(payload.requirement_id ?? "").trim();
     const orderId = String(payload.order_id ?? "").trim();
     const workerOsId = String(profile.os_id ?? "").trim();
-    const workerOsName = String(profile.os_name ?? workerOsId).trim();
     const apiClient = new api_client_1.ApiClient({ baseUrl: String(profile.server_url ?? "") });
     const existingTask = await findExistingAutoTaskBubble(apiClient, requirementId, orderId, workerOsId);
     const taskInput = buildAutoTaskBubbleInput(payload, profile);
@@ -208,46 +170,19 @@ async function performAutoTaskAndHandover({ profilePath, sessionPath, handledPat
         ? { data: existingTask, skipped: "existing_task_bubble" }
         : await apiClient.createTaskBubble(taskInput);
     const handledRecords = await (0, box_state_1.readBoxArray)(handledPath);
-    let deliveryResponse = { skipped: "already_auto_delivered" };
-    let submitted = false;
-    let artifactRef = "";
-    if (!hasAutoDeliveredMRKOrder(handledRecords, requirementId, orderId, workerOsId)) {
-        const artifact = await uploadAutoHandoverArtifact({
-            apiClient,
-            sessionPath,
-            payload,
-            requirementId,
-            orderId,
-            workerOsId,
-            workerOsName
-        });
-        artifactRef = artifact.artifactRef;
-        deliveryResponse = await (0, publish_1.publishCommand)(profilePath, sessionPath, {
-            subject: "mrk.order.handover",
-            eventType: "mrk.order.handover.submitted",
-            payload: {
-                order_id: orderId,
-                requirement_id: requirementId,
-                deliverer_os_id: workerOsId,
-                deliverer_os_name: workerOsName,
-                handover_version: 1,
-                artifact_ref: artifact.artifactRef,
-                version: "v1"
-            }
-        });
-        submitted = true;
-    }
+    const alreadySubmitted = hasAutoDeliveredMRKOrder(handledRecords, requirementId, orderId, workerOsId);
+    void profilePath;
     return {
         requirementId,
         orderId,
         workerOsId,
         existingTask,
         taskCreated: !existingTask,
-        handoverSubmitted: submitted,
+        handoverSubmitted: false,
         handoverVersion: 1,
-        artifactRef,
+        artifactRef: "",
         taskResponse,
-        deliveryResponse
+        deliveryResponse: alreadySubmitted ? { skipped: "already_auto_delivered" } : { skipped: "waiting_for_risk_report_agreement" }
     };
 }
 function isHandledChatFromPeer(record, peerOsId) {
@@ -612,9 +547,8 @@ async function autoAcceptMRKRequirementIfNeeded({ profilePath, sessionPath, unre
                 worker_os_name: String(profile.os_name ?? workerOsId).trim()
             }
         });
-        const handover = await performAutoTaskAndHandover({
+        const handover = await performAutoTaskDecomposition({
             profilePath,
-            sessionPath,
             handledPath,
             payload: {
                 ...payload,
@@ -629,7 +563,7 @@ async function autoAcceptMRKRequirementIfNeeded({ profilePath, sessionPath, unre
         });
         const action = handover.handoverSubmitted
             ? "mrk_requirement_auto_accepted_and_delivered"
-            : "mrk_requirement_auto_accepted";
+            : "mrk_requirement_auto_accepted_and_decomposed";
         await (0, box_state_1.removeBoxRecord)(submitedPath, String(claimedRecord.index ?? ""));
         await (0, box_state_1.appendBoxRecord)(handledPath, (0, box_state_1.buildHandledBoxRecord)(claimedRecord, {
             handler_type: "policy",
@@ -652,7 +586,7 @@ async function autoAcceptMRKRequirementIfNeeded({ profilePath, sessionPath, unre
                 delivery_response: handover.deliveryResponse
             }
         }));
-        await logger?.info(handover.handoverSubmitted ? "agent_mrk_requirement_auto_accepted_and_delivered" : "agent_mrk_requirement_auto_accepted", {
+        await logger?.info(handover.handoverSubmitted ? "agent_mrk_requirement_auto_accepted_and_delivered" : "agent_mrk_requirement_auto_accepted_and_decomposed", {
             source,
             subject: envelope.subject,
             eventType: envelope.event_type,
@@ -692,9 +626,8 @@ async function autoDecomposeMRKTaskIfNeeded({ profilePath, sessionPath, unreadPa
         return { handled: false, invoked: false };
     }
     try {
-        const handover = await performAutoTaskAndHandover({
+        const handover = await performAutoTaskDecomposition({
             profilePath,
-            sessionPath,
             handledPath,
             payload,
             profile
