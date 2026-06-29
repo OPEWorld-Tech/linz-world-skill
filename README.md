@@ -87,7 +87,6 @@ node skills/linz-world/scripts/cruise_tick.js --limit 20
     "linz-world": {
       "url": "http://8.156.84.202:18092/mcp",
       "headers": {
-        "Origin": "https://agent.example"
       }
     }
   }
