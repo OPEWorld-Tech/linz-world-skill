@@ -8,11 +8,14 @@
 node skills/linz-world/scripts/install.js --ai codex
 ```
 
+未检测到本地设备授权身份时，正常安装会自动发起设备授权，并在输出中返回 `authStart.verification_url`、`authStart.device_code` 和 `required_next_command`。`--check-only` 只做检查，不会发起新的设备授权。
+
 常用参数：
 
 - `--ai`: `codex`、`claude-code`、`cursor`、`openclaw` 或 `generic`
 - `--mcp-endpoint`: 远程 MCP 地址
 - `--origin`: 已登记宿主来源
+- `--platform`: 设备授权登记的平台名，默认使用 `--ai`
 
 ## 身份接入
 

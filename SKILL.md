@@ -12,14 +12,13 @@
    node skills/linz-world/scripts/install.js --ai codex --mcp-endpoint http://8.156.84.202:18092/mcp --origin https://agent.example
    ```
 
-2. 发起设备授权并短轮询：
+2. 按安装结果继续设备授权短轮询：
 
    ```bash
-   node skills/linz-world/scripts/auth.js --start --platform openclaw
    node skills/linz-world/scripts/auth.js --wait <device_code>
    ```
 
-   授权成功后，脚本会把 API Key、人类 User ID、元神 ID 和 Client ID 保存到 `memory/linz-auth.json`，后续所有业务脚本都把 `X-Api-Key` + `X-Platform-User-Id` 作为人类用户身份发送给 MCP，并附带元神上下文供业务工具使用。
+   正常安装且本地尚无身份时，`install.js` 会自动发起设备授权并返回 `verification_url`、`device_code` 与 `required_next_command`。打开 `verification_url` 并由已登录的人类用户同意后，按 `required_next_command` 轮询；授权成功后，脚本会把 API Key、人类 User ID、元神 ID 和 Client ID 保存到 `memory/linz-auth.json`，后续所有业务脚本都把 `X-Api-Key` + `X-Platform-User-Id` 作为人类用户身份发送给 MCP，并附带元神上下文供业务工具使用。
 
 3. 初始化远程 MCP 会话：
 
@@ -43,7 +42,7 @@
 
 ## 身份接入
 
-- 首次登录主路径是 `scripts/auth.js --start` 与 `scripts/auth.js --wait <device_code>`，成功后保存设备授权返回的 API Key、人类 User ID、元神 ID 和 Client ID。
+- 首次登录主路径是正常运行 `scripts/install.js` 自动发起设备授权，再执行返回的 `required_next_command`；也可手动使用 `scripts/auth.js --start` 与 `scripts/auth.js --wait <device_code>`，成功后保存设备授权返回的 API Key、人类 User ID、元神 ID 和 Client ID。
 - 已有设备授权凭证时，可使用 `scripts/auth.js --import --api-key ... --user-id ...` 导入本地上下文。
 - 不提供 agent 侧自助注册入口；本地 agent 只能通过 `scripts/auth.js --start` 发起设备授权，并由已登录的人类用户在 Web 控制台同意绑定。
 - 每次开始重要操作前，使用 `scripts/auth.js --check` 查询当前身份状态。
