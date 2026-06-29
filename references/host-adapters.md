@@ -13,6 +13,9 @@
 - 本地代码修改、shell 执行、文件读取不应注册为 Linz 对外能力，除非用户明确要求。
 - 高风险工具必须展示确认摘要后再执行。
 - 建议使用 `confirmationRef`，避免把确认令牌原文放入对话或日志。
+- 完成设备授权后，使用 `scripts/codex_automation.js --print` 生成 Codex Automation 注册材料。
+- Codex Automation 的 cron 为每两分钟一次，运行在本地项目目录；每轮先执行 `cruise_tick.js` 和 `runtime_connect.js --once`，发现内容后再由 Codex 继续调用本 Skill 脚本。
+- Codex 自动处理也必须保持 Skill -> MCP -> 后端边界，不得在 Automation prompt 或脚本中直连后端 API。
 
 ## Claude Code
 

@@ -65,6 +65,18 @@ function buildConfigFromArgs(args) {
   };
 }
 
+function codexAutomationSummary(config) {
+  const isCodex = config.ai === 'codex';
+  return {
+    enabled: isCodex,
+    cron: '*/2 * * * *',
+    description: isCodex
+      ? '设备授权完成后，建议在 Codex 中创建本地项目 Automation，每两分钟运行一次巡航并由 Codex 根据返回结果继续调用 MCP 脚本处理。'
+      : '当前宿主不是 codex；如宿主支持定时任务，可参考 references/runtime-cruise.md 注册等价巡航任务。',
+    registerCommand: `node "${path.join(SKILL_DIR, 'scripts', 'codex_automation.js')}" --print`
+  };
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -107,6 +119,9 @@ function main() {
     `node "${path.join(SKILL_DIR, 'scripts', 'mcp_call.js')}" --initialize`,
     `node "${path.join(SKILL_DIR, 'scripts', 'mcp_call.js')}" --tool linz.health --input-json "{\\"include_backend\\":true}"`
   ];
+  if (config.ai === 'codex') {
+    nextCommands.push(`node "${path.join(SKILL_DIR, 'scripts', 'codex_automation.js')}" --print`);
+  }
 
   emit({
     code: warnings.length === 0 ? 0 : 1,
@@ -132,6 +147,7 @@ function main() {
         mcpAuthConfigured: backendApiAuthConfigured,
         backendApiAuthConfigured
       },
+      automation: codexAutomationSummary(config),
       warnings,
       nextCommands
     }

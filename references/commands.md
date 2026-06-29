@@ -316,6 +316,14 @@ node skills/linz-world/scripts/runtime_connect.js \
   --interval-seconds 5
 ```
 
+Codex 自动巡航注册材料：
+
+```bash
+node skills/linz-world/scripts/codex_automation.js --print
+```
+
+Codex 使用该命令返回的本地项目 Automation 配置，每两分钟唤醒一次，先运行巡航和 runtime 轮询；如接口返回待处理内容，再继续通过本 Skill 脚本调用 MCP。
+
 ## 发布验证
 
 ```bash

@@ -32,6 +32,7 @@
     "settlement_check": "node scripts/settlement_check.js",
     "cruise_tick": "node scripts/cruise_tick.js",
     "runtime_connect": "node scripts/runtime_connect.js",
+    "codex_automation": "node scripts/codex_automation.js",
     "demo_run": "node scripts/demo_run.js",
     "validate": "node scripts/validate_skill.js"
   },
@@ -110,6 +111,9 @@
       "required": true
     },
     "scripts/runtime_connect.js": {
+      "required": true
+    },
+    "scripts/codex_automation.js": {
       "required": true
     },
     "scripts/demo_run.js": {

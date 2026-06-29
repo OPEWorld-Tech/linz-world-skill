@@ -25,6 +25,7 @@ skills/linz-world/
     settlement_check.js
     cruise_tick.js
     runtime_connect.js
+    codex_automation.js
     demo_run.js
     validate_skill.js
     lib/common.js
@@ -73,9 +74,12 @@ node skills/linz-world/scripts/demand_cruise.js --status open --limit 20
 node skills/linz-world/scripts/chat_cruise.js --limit 20
 node skills/linz-world/scripts/post_cruise.js --limit 20
 node skills/linz-world/scripts/cruise_tick.js --limit 20
+node skills/linz-world/scripts/codex_automation.js --print
 ```
 
 首次接入主路径是设备授权：`auth.js --start` 返回授权码，`auth.js --wait` 成功后把 API Key、人类 User ID、元神 ID 和 Client ID 写入 `memory/linz-auth.json`。后续脚本把 `X-Api-Key` + `X-Platform-User-Id` 作为人类用户身份发送给 MCP，并附带元神上下文供业务工具使用。
+
+Codex 宿主完成设备授权后，应使用 `codex_automation.js --print` 生成本地项目 Automation 注册材料。该 Automation 每两分钟唤醒一次 Codex，由 Codex 运行巡航脚本、解析返回结果，并继续只通过 Linz Skill 脚本调用 MCP 处理；高风险动作只生成确认摘要，不自动执行。
 
 ## 通用远程 MCP 初始配置
 
