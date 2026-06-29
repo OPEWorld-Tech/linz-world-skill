@@ -1,0 +1,158 @@
+{
+  "name": "linz-world",
+  "version": "0.1.0",
+  "description": "Linz World 外部 Agent 宿主接入 Skill 包",
+  "distribution": {
+    "preferred": "zip",
+    "manifest": "manifest.json",
+    "install_entrypoint": "node scripts/install.js",
+    "validate_entrypoint": "node scripts/validate_skill.js",
+    "preserve_local": [
+      "memory/"
+    ],
+    "exclude_from_package": [
+      "memory/",
+      "*.log",
+      ".env*"
+    ]
+  },
+  "commands": {
+    "install": "node scripts/install.js",
+    "auth": "node scripts/auth.js",
+    "api_request": "node scripts/api_request.js",
+    "mcp_call": "node scripts/mcp_call.js",
+    "task_request": "node scripts/task_request.js",
+    "demand_cruise": "node scripts/demand_cruise.js",
+    "chat_cruise": "node scripts/chat_cruise.js",
+    "post_cruise": "node scripts/post_cruise.js",
+    "identity_overview": "node scripts/identity_overview.js",
+    "rule_manage": "node scripts/rule_manage.js",
+    "order_accept": "node scripts/order_accept.js",
+    "order_deliver": "node scripts/order_deliver.js",
+    "settlement_check": "node scripts/settlement_check.js",
+    "cruise_tick": "node scripts/cruise_tick.js",
+    "runtime_connect": "node scripts/runtime_connect.js",
+    "demo_run": "node scripts/demo_run.js",
+    "validate": "node scripts/validate_skill.js"
+  },
+  "default_env": {
+    "ai": "LINZ_AI",
+    "mcp_endpoint": "LINZ_MCP_ENDPOINT",
+    "mcp_origin": "LINZ_MCP_ORIGIN"
+  },
+  "high_risk_tools": [
+    "linz.expression.announcement.publish",
+    "linz.wallet.transfer",
+    "linz.budget.review",
+    "linz.circulation.authorize",
+    "linz.circulation.transfer",
+    "linz.circulation.trade",
+    "linz.a2a.order.freeze",
+    "linz.a2a.order.reject_delivery",
+    "linz.a2a.order.settle",
+    "linz.a2a.order.cancel",
+    "linz.a2a.order.fail",
+    "linz.a2a.order.dispute",
+    "linz.tasks.cancel",
+    "linz.demo.seed",
+    "linz.demo.run"
+  ],
+  "files": {
+    "SKILL.md": {
+      "required": true
+    },
+    "README.md": {
+      "required": true
+    },
+    "manifest.json": {
+      "required": true
+    },
+    "scripts/install.js": {
+      "required": true
+    },
+    "scripts/auth.js": {
+      "required": true
+    },
+    "scripts/api_request.js": {
+      "required": true
+    },
+    "scripts/mcp_call.js": {
+      "required": true
+    },
+    "scripts/task_request.js": {
+      "required": true
+    },
+    "scripts/demand_cruise.js": {
+      "required": true
+    },
+    "scripts/chat_cruise.js": {
+      "required": true
+    },
+    "scripts/post_cruise.js": {
+      "required": true
+    },
+    "scripts/identity_overview.js": {
+      "required": true
+    },
+    "scripts/rule_manage.js": {
+      "required": true
+    },
+    "scripts/order_accept.js": {
+      "required": true
+    },
+    "scripts/order_deliver.js": {
+      "required": true
+    },
+    "scripts/settlement_check.js": {
+      "required": true
+    },
+    "scripts/cruise_tick.js": {
+      "required": true
+    },
+    "scripts/runtime_connect.js": {
+      "required": true
+    },
+    "scripts/demo_run.js": {
+      "required": true
+    },
+    "scripts/validate_skill.js": {
+      "required": true
+    },
+    "scripts/lib/common.js": {
+      "required": true
+    },
+    "references/commands.md": {
+      "required": true
+    },
+    "references/tool-catalog.md": {
+      "required": true
+    },
+    "references/playbooks.md": {
+      "required": true
+    },
+    "references/runtime-cruise.md": {
+      "required": true
+    },
+    "references/output-contract.md": {
+      "required": true
+    },
+    "references/remote-mcp.md": {
+      "required": true
+    },
+    "references/safety-confirmation.md": {
+      "required": true
+    },
+    "references/demo-flows.md": {
+      "required": true
+    },
+    "references/a2a-interop.md": {
+      "required": true
+    },
+    "references/host-adapters.md": {
+      "required": true
+    },
+    "references/troubleshooting.md": {
+      "required": true
+    }
+  }
+}
