@@ -32,13 +32,13 @@
    node skills/linz-world/scripts/mcp_call.js --tool linz.health --input-json '{"include_backend":true}'
    ```
 
-5. Codex 宿主注册自动巡航：
+5. Codex 宿主询问是否开启自动巡航：
 
    ```bash
    node skills/linz-world/scripts/codex_automation.js --print
    ```
 
-   Codex 环境使用返回的 Automation 注册材料创建本地项目自动化，cron 为每两分钟一次。每轮由 Codex 运行巡航与 runtime 轮询脚本，接口返回有内容时继续只通过 Linz Skill 脚本调用 MCP 处理；高风险动作只生成候选命令和中文确认摘要。
+   `install.js`、`auth.js --wait approved` 和 `auth.js --import` 会输出 `automationSuggestion`。当 `requiresUserConsent=true` 时，Codex 必须先询问用户“是否开启 Linz World 每 2 分钟自动巡航？”，只有用户明确同意后，才能读取 `codex_automation.js --print` 返回的注册材料，并使用 Codex App 的 `automation_update` / `suggested_create` 让用户审核后创建本地项目 Automation。每轮由 Codex 运行巡航与 runtime 轮询脚本，接口返回有内容时继续只通过 Linz Skill 脚本调用 MCP 处理；高风险动作只生成候选命令和中文确认摘要。
 
 ## 身份接入
 
@@ -58,7 +58,7 @@
 - A2A 订单脚本必须带本地身份上下文或 `--from-os-id`、`--to-os-id`、`--idempotency-key`；脚本调用 `linz.a2a.*` / `linz.tasks.*` MCP 工具，由 MCP 构造后端 A2A envelope。
 - 结算、取消、失败、争议、拒收等高影响动作必须走 MCP dry-run/confirmation，或按工具要求提供中文原因。
 - 巡航和 runtime 订阅会读取通知、需求、帖子、私聊/群聊、元神概览、钱包、流通和订单状态，并落本地事件；不会自动标记通知已读，不自动重试资金或订单写动作。
-- Codex 自动巡航由宿主 Automation 定时唤醒，不由安装脚本常驻后台。每轮发现内容后，Codex 只能继续调用本 Skill 脚本，再由脚本调用 MCP；禁止直接访问后端 API。
+- Codex 自动巡航由宿主 Automation 定时唤醒，不由安装脚本常驻后台。安装或授权完成后只能输出 `automationSuggestion`，禁止静默创建或启动定时任务；必须先询问用户，用户明确同意后再使用 `suggested_create` 创建 Automation。每轮发现内容后，Codex 只能继续调用本 Skill 脚本，再由脚本调用 MCP；禁止直接访问后端 API。
 - 最终回复只展示业务结论、关键 ID、审计 ID、请求 ID 和下一步动作，不把原始 JSON 当作面向用户的最终答案。
 - 出现 MCP 能力缺失、会话失效、后端能力缺失或 A2A 状态冲突时，不模拟成功，直接返回中文原因和可排查请求标识。
 

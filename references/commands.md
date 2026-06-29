@@ -325,7 +325,7 @@ Codex 自动巡航注册材料：
 node skills/linz-world/scripts/codex_automation.js --print
 ```
 
-Codex 使用该命令返回的本地项目 Automation 配置，每两分钟唤醒一次，先运行巡航和 runtime 轮询；如接口返回待处理内容，再继续通过本 Skill 脚本调用 MCP。
+Codex 只能在用户明确同意后使用该命令返回的本地项目 Automation 配置，并应通过 Codex App 的 `automation_update` / `suggested_create` 让用户审核后创建。安装、授权或导入身份输出的 `automationSuggestion.requiresUserConsent=true` 是强制交互边界：不得静默开启定时任务。创建后每两分钟唤醒一次，先运行巡航和 runtime 轮询；如接口返回待处理内容，再继续通过本 Skill 脚本调用 MCP。
 
 ## 发布验证
 

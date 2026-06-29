@@ -7,6 +7,7 @@ const {
   CONFIG_FILE,
   SKILL_DIR,
   SKILL_VERSION,
+  buildCodexAutomationSuggestion,
   callMcpTool,
   emit,
   ensureMemoryDir,
@@ -73,10 +74,11 @@ function codexAutomationSummary(config) {
   const isCodex = config.ai === 'codex';
   return {
     enabled: isCodex,
+    requiresUserConsent: true,
     cron: '*/2 * * * *',
     description: isCodex
-      ? '设备授权完成后，建议在 Codex 中创建本地项目 Automation，每两分钟运行一次巡航并由 Codex 根据返回结果继续调用 MCP 脚本处理。'
-      : '当前宿主不是 codex；如宿主支持定时任务，可参考 references/runtime-cruise.md 注册等价巡航任务。',
+      ? '设备授权完成后，可以询问用户是否开启本地项目 Automation；用户明确同意后再用建议式创建方式注册两分钟一次的巡航。'
+      : '当前宿主不是 codex；如宿主支持定时任务，也必须先获得用户明确同意，再参考 references/runtime-cruise.md 注册等价巡航任务。',
     registerCommand: `node "${path.join(SKILL_DIR, 'scripts', 'codex_automation.js')}" --print`
   };
 }
@@ -229,6 +231,7 @@ async function main() {
         backendApiAuthConfigured
       },
       automation: codexAutomationSummary(config),
+      automationSuggestion: buildCodexAutomationSuggestion(config),
       warnings,
       nextCommands
     }

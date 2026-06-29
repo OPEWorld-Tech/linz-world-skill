@@ -7,6 +7,7 @@ const {
   AUTH_FILE,
   PROFILE_FILE,
   SKILL_DIR,
+  buildCodexAutomationSuggestion,
   callMcpToolEnvelope,
   emit,
   ensureMemoryDir,
@@ -99,6 +100,9 @@ async function waitDeviceAuth(args) {
     message: data.status === 'approved' ? '设备授权成功' : '设备授权状态已更新',
     data: {
       ...sanitize(data),
+      automationSuggestion: data.status === 'approved'
+        ? buildCodexAutomationSuggestion(config)
+        : undefined,
       required_next_command: data.status === 'pending'
         ? `node "${path.join(SKILL_DIR, 'scripts', 'auth.js')}" --wait ${deviceCode}`
         : undefined
@@ -153,7 +157,8 @@ function importAuth(args) {
       originalSpiritId,
       clientId,
       apiKeyPreview: redact(apiKey),
-      nextCommand: `node "${path.join(SKILL_DIR, 'scripts', 'auth.js')}" --check`
+      nextCommand: `node "${path.join(SKILL_DIR, 'scripts', 'auth.js')}" --check`,
+      automationSuggestion: buildCodexAutomationSuggestion(loadConfig({}))
     }
   });
 }

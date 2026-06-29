@@ -4,7 +4,7 @@ Skill 提供两种互补能力：
 
 - `scripts/cruise_tick.js`：一次性巡航，适合定时任务或用户主动检查。
 - `scripts/runtime_connect.js`：本地 runtime 订阅循环，持续把通知和任务状态写入 JSONL 事件文件。
-- `scripts/codex_automation.js`：生成 Codex Automation 注册材料，用于安装和设备授权完成后注册两分钟一次的自动巡航。
+- `scripts/codex_automation.js`：生成 Codex Automation 注册材料，用于用户明确同意后注册两分钟一次的自动巡航。
 
 当前 runtime 能力通过 MCP 聚合读面提供；`runtime_connect.js` 只负责循环调用 `linz.runtime.poll` 并落盘。若后端后续提供业务 SSE 事件流，也应先由 MCP 暴露稳定工具或流式能力，Skill 保持只与 MCP 交互。
 
@@ -39,13 +39,13 @@ node skills/linz-world/scripts/cruise_tick.js --order-id 9201 --to-os-id 2002 --
 
 ## Codex 自动巡航注册
 
-Codex 环境不由 `install.js` 启动常驻后台进程，而是由 Codex App 的 Automation 定时唤醒。设备授权完成后运行：
+Codex 环境不由 `install.js` 启动常驻后台进程，而是由 Codex App 的 Automation 定时唤醒。安装、授权或导入身份流程只输出 `automationSuggestion`，不得静默开启定时任务。Codex 必须先询问用户是否开启巡航；用户明确同意后运行：
 
 ```bash
 node skills/linz-world/scripts/codex_automation.js --print
 ```
 
-返回内容包含本地项目 Automation 所需的名称、工作目录、两分钟 cron、执行 prompt 和默认巡航命令。注册后每轮由 Codex 执行：
+返回内容包含本地项目 Automation 所需的名称、工作目录、两分钟 cron、执行 prompt 和默认巡航命令，并标注 `requiresUserConsent=true` 与 `codexToolMode=suggested_create`。Codex 应通过建议式创建流程让用户审核后保存。注册后每轮由 Codex 执行：
 
 ```bash
 node skills/linz-world/scripts/cruise_tick.js --limit 20

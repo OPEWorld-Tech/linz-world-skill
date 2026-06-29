@@ -78,6 +78,9 @@ function buildAutomation(args) {
     kind: 'codex_automation',
     name,
     status: 'ACTIVE',
+    requiresUserConsent: true,
+    codexToolMode: 'suggested_create',
+    consentInstruction: '必须先询问用户是否开启自动巡航；只有用户明确同意后，Codex 才能用 suggested_create 创建 Automation。',
     destination: 'local',
     executionEnvironment: 'local',
     schedule: {

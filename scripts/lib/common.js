@@ -17,6 +17,7 @@ const CRUISE_STATE_FILE = path.join(RUNTIME_DIR, 'cruise-state.json');
 const RUNTIME_EVENTS_FILE = path.join(RUNTIME_DIR, 'linz-runtime-events.jsonl');
 
 const SKILL_VERSION = '0.1.0';
+const DEFAULT_CODEX_AUTOMATION_CRON = '*/2 * * * *';
 
 const DEFAULT_CONFIG = {
   ai: 'generic',
@@ -616,12 +617,44 @@ function runtimeSummary() {
   };
 }
 
+function buildCodexAutomationSuggestion(config = {}) {
+  const isCodex = (config.ai || DEFAULT_CONFIG.ai) === 'codex';
+  const suggestedCommand = `node "${path.join(SKILL_DIR, 'scripts', 'codex_automation.js')}" --print`;
+  return {
+    available: isCodex,
+    requiresUserConsent: true,
+    question: '是否开启 Linz World 每 2 分钟自动巡航？',
+    suggestedCommand,
+    schedule: {
+      cron: DEFAULT_CODEX_AUTOMATION_CRON,
+      description: '每两分钟执行一次'
+    },
+    codexHook: isCodex
+      ? {
+        tool: 'automation_update',
+        mode: 'suggested_create',
+        instruction: '用户明确同意后，Codex 读取 suggestedCommand 返回的注册材料，并用 suggested_create 让用户审核后创建 Automation。'
+      }
+      : null,
+    safety: {
+      mcpOnly: true,
+      autoReadAllowed: true,
+      highRiskRequiresConfirmation: true,
+      noSilentStart: true
+    },
+    nextStep: isCodex
+      ? '请先询问用户是否开启自动巡航；用户同意后再创建 Codex Automation。'
+      : '当前宿主不是 codex；如宿主支持定时任务，只能在用户明确同意后参考 suggestedCommand 配置等价巡航。'
+  };
+}
+
 module.exports = {
   AUTH_FILE,
   CONFIG_FILE,
   CONFIRMATION_FILE,
   CRUISE_STATE_FILE,
   DEFAULT_CONFIG,
+  DEFAULT_CODEX_AUTOMATION_CRON,
   HIGH_RISK_TOOLS,
   MEMORY_DIR,
   PROFILE_FILE,
@@ -634,6 +667,7 @@ module.exports = {
   appendJsonLine,
   appendRuntimeEvent,
   businessDetailLinks,
+  buildCodexAutomationSuggestion,
   callMcpTool,
   callMcpToolEnvelope,
   compact,
